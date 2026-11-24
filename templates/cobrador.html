@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Cobrador — Juegos Patri</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen flex flex-col">
+
+  <!-- BARRA SUPERIOR MÓVIL -->
+  <header class="bg-slate-900 text-white px-4 py-3 flex items-center justify-between sticky top-0 z-30 shadow">
+    <div class="flex items-center gap-2.5">
+      <div class="bg-emerald-600 text-white font-black px-2.5 py-1 rounded-lg text-sm">JP</div>
+      <div>
+        <h1 class="font-extrabold text-sm leading-tight">MODO COBRADOR</h1>
+        <p id="estado-red" class="text-[11px] text-emerald-400">● Online • Carga rápida</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="abrirRendicion()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black px-3 py-2 rounded-lg">
+        💰 Rendición Hoy
+      </button>
+      <a href="/logout" class="bg-rose-700 hover:bg-rose-600 text-white text-xs font-bold px-2.5 py-2 rounded-lg">🚪</a>
+    </div>
+  </header>
+
+  <!-- BANNER DE COLA OFFLINE PENDIENTE -->
+  <div id="banner-offline" class="hidden bg-amber-100 border-b-2 border-amber-400 px-4 py-2.5">
+    <div class="max-w-xl mx-auto flex items-center justify-between gap-2 text-xs">
+      <span class="font-extrabold text-amber-950">
+        ⏳ <span id="cnt-pendientes-offline">0</span> registro(s) guardado(s) sin internet
+      </span>
+      <button type="button" onclick="sincronizarColaOffline()" id="btn-sinc-offline"
+        class="bg-amber-700 hover:bg-amber-600 text-white font-black px-3 py-1.5 rounded-lg shrink-0">
+        🔄 Sincronizar ahora
+      </button>
+    </div>
+  </div>
+
+  <!-- VISTA 1: LISTA DE MESAS -->
+  <main id="vista-lista" class="flex-1 p-3 max-w-xl w-full mx-auto space-y-3">
+    <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 space-y-2">
+      <div class="flex gap-2">
+        <input id="buscador" type="text" oninput="filtrar()"
+          placeholder="Buscar por N° de mesa, nombre o lugar..."
+          class="flex-1 px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+        <button type="button" onclick="abrirModalNuevaMesa()"
+          class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-3.5 py-2.5 rounded-xl shadow-sm shrink-0">
+          + Mesa
+        </button>
+      </div>
+      <select id="filtro-ciudad" onchange="filtrar()"
+        class="w-full px-3 py-2 text-sm font-semibold bg-slate-50 border border-slate-300 rounded-xl">
+        <option value="">Todas las ciudades</option>
+      </select>
+    </div>
+
+    <div id="lista-mesas" class="space-y-2.5 pb-8"></div>
+  </main>
+
+  <!-- VISTA 2: CARGAR RELOJ DE UNA MESA -->
+  <main id="vista-carga" class="hidden flex-1 p-3 max-w-xl w-full mx-auto space-y-3 pb-10">
+    <button onclick="volverLista()" class="text-xs font-extrabold text-slate-700 bg-white border border-slate-300 px-3 py-2 rounded-lg shadow-sm">
+      ← Volver a la lista
+    </button>
+
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
+      <div class="flex justify-between items-start gap-2 border-b pb-3">
+        <div>
+          <span id="c-mesa" class="inline-block bg-slate-900 text-white text-xs font-black px-2.5 py-1 rounded-md">Mesa</span>
+          <h2 id="c-senor" class="text-lg font-black text-slate-900 mt-1"></h2>
+          <p id="c-lugar" class="text-xs text-slate-500"></p>
+        </div>
+        <a id="c-btn-gps" href="#" target="_blank" class="hidden bg-sky-600 text-white text-xs font-bold px-3 py-2 rounded-lg shrink-0">
+          📍 Ir GPS
+        </a>
+      </div>
+
+      <div class="grid grid-cols-3 gap-2 text-center bg-slate-50 p-3 rounded-xl border">
+        <div>
+          <span class="block text-[10px] font-bold text-slate-500 uppercase">Reloj Ant.</span>
+          <strong id="c-reloj-ant" class="text-base font-black text-slate-900">0</strong>
+        </div>
+        <div>
+          <span class="block text-[10px] font-bold text-slate-500 uppercase">Tarifa</span>
+          <strong id="c-tarifa" class="text-base font-black text-slate-900">1.000</strong>
+        </div>
+        <div>
+          <span class="block text-[10px] font-bold text-slate-500 uppercase">Saldo Ant.</span>
+          <strong id="c-saldo-ant" class="text-base font-black text-amber-700">0</strong>
+        </div>
+      </div>
+
+      <form id="form-cobro" onsubmit="guardarCobro(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-extrabold text-slate-700 mb-1">1. Reloj N° Actual *</label>
+          <input id="in-reloj" type="number" inputmode="numeric" required oninput="recalcular()"
+            placeholder="Escribe el número del reloj"
+            class="w-full px-4 py-3 text-xl font-black border-2 border-slate-300 rounded-xl focus:border-emerald-500 focus:outline-none" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5 bg-blue-50 border border-blue-200 p-3 rounded-xl text-center">
+          <div>
+            <span class="block text-[11px] font-bold text-blue-800">Juegos</span>
+            <strong id="prev-juegos" class="text-lg font-black text-slate-900">0</strong>
+          </div>
+          <div>
+            <span class="block text-[11px] font-bold text-blue-800">Total Gs.</span>
+            <strong id="prev-total" class="text-lg font-black text-blue-700">0 Gs.</strong>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-extrabold text-slate-700 mb-1">2. Entrega / Cobrado Hoy (Gs.) *</label>
+          <input id="in-entrega" type="number" inputmode="numeric" min="0" value="0" required oninput="recalcular()"
+            class="w-full px-4 py-3 text-xl font-black border-2 border-slate-300 rounded-xl focus:border-emerald-500 focus:outline-none" />
+        </div>
+
+        <div class="bg-amber-50 border-2 border-amber-300 p-3 rounded-xl flex justify-between items-center">
+          <span class="text-xs font-extrabold text-amber-900">Saldo que queda a cobrar:</span>
+          <strong id="prev-saldo" class="text-lg font-black text-amber-800">0 Gs.</strong>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+          <div>
+            <label class="block font-extrabold text-slate-700 mb-1">Motivo / Situación</label>
+            <select id="in-motivo" onchange="aplicarAtajoMotivo()"
+              class="w-full px-2.5 py-2.5 border border-slate-300 rounded-xl bg-slate-50 font-bold">
+              <option value="">Cobro normal</option>
+              <option value="Local cerrado">Local cerrado</option>
+              <option value="Reloj sin movimiento (0)">Reloj sin movimiento (0)</option>
+              <option value="Pago parcial / Promesa">Pago parcial / Promesa</option>
+              <option value="Reloj reparado / cambiado">Reloj reparado / cambiado</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-extrabold text-slate-700 mb-1">Nota breve (opcional)</label>
+            <input id="in-nota" placeholder="Ej: Paga el viernes"
+              class="w-full px-2.5 py-2.5 border border-slate-300 rounded-xl bg-slate-50" />
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <label class="block text-xs font-extrabold text-slate-700">3. Foto del Reloj (Recomendado)</label>
+          <input id="in-foto" type="file" accept="image/*" capture="environment" class="hidden" onchange="mostrarPreviewFoto(this)" />
+          <label for="in-foto" id="btn-sacar-foto"
+            class="flex items-center justify-center gap-2 w-full bg-sky-600 hover:bg-sky-500 active:scale-[0.99] text-white text-sm font-black py-3.5 rounded-xl shadow cursor-pointer transition">
+            📷 SACAR FOTO DEL RELOJ
+          </label>
+          <img id="preview-foto" class="hidden w-full h-40 object-cover rounded-xl border-2 border-emerald-400" />
+        </div>
+
+        <label class="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border">
+          <input id="chk-gps" type="checkbox" checked class="accent-emerald-600 w-4 h-4" />
+          <span>Guardar ubicación GPS si esta mesa aún no tiene mapa</span>
+        </label>
+
+        <button id="btn-guardar-cobro" type="submit"
+          class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-base font-black py-3.5 rounded-xl shadow-md">
+          ✅ GUARDAR COBRO
+        </button>
+      </form>
+
+      <!-- BLOQUE POST-GUARDADO -->
+      <div id="bloque-exito" class="hidden bg-emerald-50 border-2 border-emerald-400 rounded-xl p-4 text-center space-y-3">
+        <div id="titulo-exito" class="text-emerald-800 font-black text-base">¡Cobro guardado correctamente!</div>
+        <p id="subtitulo-exito" class="hidden text-xs font-semibold text-amber-900 bg-amber-100 p-2 rounded-lg"></p>
+        <button id="btn-wa-exito" onclick="mandarComprobanteWa()"
+          class="w-full bg-green-600 hover:bg-green-500 text-white font-extrabold py-3 rounded-xl text-sm shadow">
+          💬 Enviar Comprobante por WhatsApp
+        </button>
+        <button onclick="volverLista()"
+          class="w-full bg-slate-900 text-white font-bold py-2.5 rounded-xl text-xs">
+          Seguir con la siguiente mesa →
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- VISTA 3: RENDICIÓN DEL DÍA -->
+  <main id="vista-rendicion" class="hidden flex-1 p-3 max-w-xl w-full mx-auto space-y-4 pb-10">
+    <button onclick="volverLista()" class="text-xs font-extrabold text-slate-700 bg-white border border-slate-300 px-3 py-2 rounded-lg shadow-sm">
+      ← Volver a la lista
+    </button>
+
+    <div class="bg-slate-900 text-white rounded-2xl p-5 shadow space-y-3">
+      <div class="flex justify-between items-center">
+        <span class="text-xs font-bold uppercase text-slate-400">Rendición del Día</span>
+        <span id="r-fecha" class="text-xs font-bold text-slate-300"></span>
+      </div>
+      <div class="grid grid-cols-2 gap-3 pt-1">
+        <div class="bg-slate-800 p-3 rounded-xl">
+          <span class="block text-[11px] text-slate-400">Total Cobrado</span>
+          <strong id="r-cobrado" class="text-lg font-black text-emerald-400">0 Gs.</strong>
+        </div>
+        <div class="bg-slate-800 p-3 rounded-xl">
+          <span class="block text-[11px] text-slate-400">Gastos de Viaje</span>
+          <strong id="r-gastos" class="text-lg font-black text-rose-400">0 Gs.</strong>
+        </div>
+      </div>
+      <div class="bg-emerald-600 p-3.5 rounded-xl flex justify-between items-center">
+        <span class="text-xs font-extrabold uppercase">Efectivo a Rendir:</span>
+        <strong id="r-neto" class="text-xl font-black">0 Gs.</strong>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3">
+      <h3 class="text-sm font-extrabold text-slate-900">⛽ Cargar Gasto del Día (Combustible / Peaje)</h3>
+      <form onsubmit="guardarGastoCobrador(event)" class="grid grid-cols-2 gap-2.5 text-xs">
+        <select id="g-cat" class="px-2.5 py-2 border rounded-lg bg-slate-50 font-bold">
+          <option value="Combustible">Combustible</option>
+          <option value="Peaje">Peaje</option>
+          <option value="Viático / Comida">Viático / Comida</option>
+          <option value="Repuestos">Repuestos</option>
+        </select>
+        <input id="g-monto" type="number" inputmode="numeric" required min="1" placeholder="Monto Gs."
+          class="px-2.5 py-2 border rounded-lg bg-slate-50 font-bold" />
+        <input id="g-desc" placeholder="Detalle (ej: Peaje / Gasoil)" class="col-span-2 px-2.5 py-2 border rounded-lg bg-slate-50" />
+        <button type="submit" class="col-span-2 bg-rose-600 text-white font-extrabold py-2.5 rounded-lg">+ Registrar Gasto</button>
+      </form>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="px-4 py-3 bg-slate-50 border-b font-extrabold text-xs text-slate-700">COBROS REALIZADOS HOY</div>
+      <div id="r-lista-cobros" class="divide-y divide-slate-100"></div>
+    </div>
+  </main>
+
+  <!-- MODAL NUEVA MESA / CLIENTE (COBRADOR) -->
+  <div id="modal-nueva-mesa" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3">
+    <div class="bg-white rounded-2xl max-w-md w-full p-4 shadow-2xl space-y-3 max-h-[92vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="font-black text-base text-slate-900">+ Registrar Nueva Mesa / Cliente</h3>
+        <button type="button" onclick="cerrarModalNuevaMesa()" class="text-slate-400 hover:text-slate-700 font-bold text-lg">✕</button>
+      </div>
+
+      <form id="form-nueva-mesa" onsubmit="guardarNuevaMesa(event)" class="grid grid-cols-2 gap-2.5 text-xs">
+        <div>
+          <label class="block font-bold mb-1">Mesa N° *</label>
+          <input id="nm-mesa" required inputmode="numeric" placeholder="Ej: 305"
+            class="w-full px-3 py-2 border rounded-xl font-bold" />
+        </div>
+        <div>
+          <label class="block font-bold mb-1">Tarifa (Gs.) *</label>
+          <select id="nm-tarifa" class="w-full px-3 py-2 border rounded-xl font-bold bg-slate-50">
+            <option value="1000">1.000 Gs.</option>
+            <option value="750">750 Gs.</option>
+            <option value="500">500 Gs.</option>
+            <option value="1500">1.500 Gs.</option>
+            <option value="2000">2.000 Gs.</option>
+          </select>
+        </div>
+
+        <div class="col-span-2">
+          <label class="block font-bold mb-1">Señor / Responsable *</label>
+          <input id="nm-senor" required placeholder="Nombre completo"
+            class="w-full px-3 py-2 border rounded-xl" />
+        </div>
+
+        <div>
+          <label class="block font-bold mb-1">Ciudad</label>
+          <input id="nm-ciudad" placeholder="Ej: Pdte. Franco"
+            class="w-full px-3 py-2 border rounded-xl" />
+        </div>
+        <div>
+          <label class="block font-bold mb-1">Lugar / Local</label>
+          <input id="nm-lugar" placeholder="Ej: Despensa / Bodega"
+            class="w-full px-3 py-2 border rounded-xl" />
+        </div>
+
+        <div>
+          <label class="block font-bold mb-1">Calle / Celular</label>
+          <input id="nm-calle" placeholder="0981..."
+            class="w-full px-3 py-2 border rounded-xl" />
+        </div>
+        <div>
+          <label class="block font-bold mb-1">Documento N° C.I.</label>
+          <input id="nm-ci" placeholder="Opcional"
+            class="w-full px-3 py-2 border rounded-xl" />
+        </div>
+
+        <div>
+          <label class="block font-bold mb-1">Reloj Inicial</label>
+          <input id="nm-reloj" type="number" inputmode="numeric" placeholder="Ej: 1200"
+            class="w-full px-3 py-2 border rounded-xl font-bold" />
+        </div>
+        <div>
+          <label class="block font-bold mb-1">Fecha</label>
+          <input id="nm-fecha" type="date" required
+            class="w-full px-3 py-2 border rounded-xl bg-slate-50" />
+        </div>
+
+        <label class="col-span-2 flex items-center gap-2 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border">
+          <input id="nm-chk-gps" type="checkbox" checked class="accent-emerald-600 w-4 h-4" />
+          <span>Capturar ubicación GPS actual del local</span>
+        </label>
+
+        <div class="col-span-2 flex gap-2 pt-1">
+          <button type="button" onclick="cerrarModalNuevaMesa()" class="flex-1 py-2.5 bg-slate-100 font-bold rounded-xl">Cancelar</button>
+          <button id="btn-guardar-nm" type="submit" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl">Guardar Mesa</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const KEY_CLIENTES = 'jp_cobrador_clientes_v1';
+    const KEY_COLA = 'jp_cobrador_cola_v1';
+    const UMBRAL_SALTO_JUEGOS = 300;
+
+    let clientes = [];
+    let ciudadesCache = [];
+    let cliSel = null;
+    let ultimaLecturaGuardada = null;
+    let sincronizando = false;
+    let dbIdb = null;
+    let inicioConParametroProcesado = false;
+
+    const fmt = (n) => Number(n || 0).toLocaleString('es-PY');
+
+    function abrirIdb() {
+      return new Promise(resolve => {
+        if (!('indexedDB' in window)) return resolve(null);
+        try {
+          const req = indexedDB.open('JuegosPatriCobradorDB', 1);
+          req.onupgradeneeded = (ev) => {
+            const db = ev.target.result;
+            if (!db.objectStoreNames.contains('cola')) {
+              db.createObjectStore('cola', { keyPath: 'id_local' });
+            }
+          };
+          req.onsuccess = (ev) => resolve(ev.target.result);
+          req.onerror = () => resolve(null);
+        } catch { resolve(null); }
+      });
+    }
+
+    async function guardarIdbCola(cola) {
+      if (!dbIdb) dbIdb = await abrirIdb();
+      if (!dbIdb) return;
+      try {
+        const tx = dbIdb.transaction('cola', 'readwrite');
+        const store = tx.objectStore('cola');
+        store.clear();
+        cola.forEach(item => store.put(item));
+      } catch {}
+    }
+
+    async function leerIdbCola() {
+      if (!dbIdb) dbIdb = await abrirIdb();
+      if (!dbIdb) return [];
+      return new Promise(resolve => {
+        try {
+          const tx = dbIdb.transaction('cola', 'readonly');
+          const req = tx.objectStore('cola').getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => resolve([]);
+        } catch { resolve([]); }
+      });
+    }
+
+    function leerColaOffline() {
+      try { return JSON.parse(localStorage.getItem(KEY_COLA) || '[]'); }
+      catch { return []; }
+    }
+
+    function guardarColaOffline(cola) {
+      localStorage.setItem(KEY_COLA, JSON.stringify(cola));
+      guardarIdbCola(cola);
+      actualizarBannerOffline();
+    }
+
+    async function restaurarColaSiVacia() {
+      const local = leerColaOffline();
+      if (local.length > 0) {
+        actualizarBannerOffline();
+        return;
+      }
+      const respaldo = await leerIdbCola();
+      if (respaldo.length > 0) {
+        localStorage.setItem(KEY_COLA, JSON.stringify(respaldo));
+        actualizarBannerOffline();
+      }
+    }
+
+    function actualizarBannerOffline() {
+      const cola = leerColaOffline();
+      const banner = document.getElementById('banner-offline');
+      document.getElementById('cnt-pendientes-offline').textContent = cola.length;
+      banner.classList.toggle('hidden', cola.length === 0);
+    }
+
+    function actualizarIndicadorRed() {
+      const el = document.getElementById('estado-red');
+      if (navigator.onLine) {
+        el.textContent = '● Online • Carga rápida';
+        el.className = 'text-[11px] text-emerald-400';
+      } else {
+        el.textContent = '○ Sin internet • Modo local';
+        el.className = 'text-[11px] text-amber-400 font-bold';
+      }
+    }
+
+    function guardarCacheClientes(lista, ciudades) {
+      try {
+        localStorage.setItem(KEY_CLIENTES, JSON.stringify({ clientes: lista, ciudades: ciudades || [] }));
+      } catch {}
+    }
+
+    function leerCacheClientes() {
+      try {
+        return JSON.parse(localStorage.getItem(KEY_CLIENTES) || 'null');
+      } catch {
+        return null;
+      }
+    }
+
+    function aplicarFiltroLocal(lista, q, ciudad) {
+      const ql = (q || '').trim().toLowerCase();
+      return lista.filter(c => {
+        if (ciudad && (c.ciudad || '').trim() !== ciudad) return false;
+        if (!ql) return true;
+        return String(c.mesa_num || '').toLowerCase().includes(ql) ||
+               String(c.senor || '').toLowerCase().includes(ql) ||
+               String(c.lugar || '').toLowerCase().includes(ql) ||
+               String(c.ciudad || '').toLowerCase().includes(ql);
+      });
+    }
+
+    function renderizarListaMesas(lista) {
+      document.getElementById('lista-mesas').innerHTML = lista.length
+        ? lista.map(c => `
+            <div onclick="abrirMesa(${c.id})" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm active:scale-[0.99] transition cursor-pointer">
+              <div class="flex justify-between items-start gap-2">
+                <div>
+                  <span class="bg-slate-900 text-white text-xs font-black px-2 py-0.5 rounded">Mesa ${c.mesa_num}</span>
+                  <span class="font-extrabold text-sm text-slate-900 ml-1.5">${c.senor}</span>
+                </div>
+                <span class="text-xs font-black px-2 py-0.5 rounded ${c.saldo_actual > 0 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">
+                  ${c.saldo_actual > 0 ? fmt(c.saldo_actual) + ' Gs.' : 'Al día'}
+                </span>
+              </div>
+              <div class="flex justify-between items-center text-xs text-slate-500 mt-2">
+                <span>${c.ciudad || ''} ${c.lugar ? '• ' + c.lugar : ''}</span>
+                <span>Reloj: <strong class="text-slate-800">${fmt(c.ultimo_reloj)}</strong></span>
+              </div>
+            </div>
+          `).join('')
+        : '<div class="bg-white p-5 rounded-xl text-center text-xs text-slate-400 border">No se encontraron mesas.</div>';
+    }
+
+    function mostrarVista(v) {
+      document.getElementById('vista-lista').classList.toggle('hidden', v !== 'lista');
+      document.getElementById('vista-carga').classList.toggle('hidden', v !== 'carga');
+      document.getElementById('vista-rendicion').classList.toggle('hidden', v !== 'rendicion');
+    }
+
+    function volverLista() {
+      mostrarVista('lista');
+      cargarLista();
+    }
+
+    function abrirMesaDesdeUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const idParam = params.get('cliente_id');
+      const mesaParam = params.get('mesa');
+
+      if (idParam) {
+        const encontradaId = clientes.find(x => String(x.id) === String(idParam));
+        if (encontradaId) {
+          abrirMesa(encontradaId.id);
+          return true;
+        }
+      }
+
+      if (mesaParam) {
+        const mLimpia = String(mesaParam).trim().toLowerCase();
+        const encontradaMesa = clientes.find(x => String(x.mesa_num || '').trim().toLowerCase() === mLimpia);
+        if (encontradaMesa) {
+          abrirMesa(encontradaMesa.id);
+          return true;
+        }
+      }
+      return false;
+    }
+
+    async function cargarLista() {
+      actualizarIndicadorRed();
+      await restaurarColaSiVacia();
+
+      const q = document.getElementById('buscador').value;
+      const ciudad = document.getElementById('filtro-ciudad').value;
+
+      if (navigator.onLine && leerColaOffline().length > 0 && !sincronizando) {
+        await sincronizarColaOffline(true);
+      }
+
+      const cache = leerCacheClientes();
+      if (cache && Array.isArray(cache.clientes)) {
+        clientes = cache.clientes;
+        ciudadesCache = cache.ciudades || [];
+        poblarSelectCiudad(ciudadesCache, ciudad);
+        renderizarListaMesas(aplicarFiltroLocal(clientes, q, ciudad));
+        if (!inicioConParametroProcesado && clientes.length > 0) {
+          inicioConParametroProcesado = abrirMesaDesdeUrl();
+        }
+      }
+
+      if (!navigator.onLine) return;
+
+      try {
+        const res = await fetch(`/api/clientes?q=${encodeURIComponent(q)}&ciudad=${encodeURIComponent(ciudad)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const filtrados = data.clientes || [];
+        if (!q && !ciudad) {
+          clientes = filtrados;
+          ciudadesCache = data.ciudades || [];
+          guardarCacheClientes(clientes, ciudadesCache);
+        } else if (cache && Array.isArray(cache.clientes)) {
+          ciudadesCache = data.ciudades || ciudadesCache;
+        }
+        poblarSelectCiudad(data.ciudades || ciudadesCache, ciudad);
+        renderizarListaMesas(filtrados);
+        if (!inicioConParametroProcesado && clientes.length > 0) {
+          inicioConParametroProcesado = abrirMesaDesdeUrl();
+        }
+      } catch {}
+    }
+
+    function poblarSelectCiudad(ciudades, valActual) {
+      const sel = document.getElementById('filtro-ciudad');
+      sel.innerHTML = '<option value="">Todas las ciudades</option>' +
+        (ciudades || []).map(c => `<option value="${c}" ${c === valActual ? 'selected' : ''}>${c}</option>`).join('');
+    }
+
+    let tBusq;
+    function filtrar() {
+      clearTimeout(tBusq);
+      tBusq = setTimeout(() => {
+        const cache = leerCacheClientes();
+        if (cache && Array.isArray(cache.clientes) && !navigator.onLine) {
+          renderizarListaMesas(aplicarFiltroLocal(cache.clientes, document.getElementById('buscador').value, document.getElementById('filtro-ciudad').value));
+        } else {
+          cargarLista();
+        }
+      }, 150);
+    }
+
+    /* NUEVA MESA / CLIENTE */
+    function abrirModalNuevaMesa() {
+      ['nm-mesa', 'nm-senor', 'nm-ciudad', 'nm-lugar', 'nm-calle', 'nm-ci', 'nm-reloj'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+      document.getElementById('nm-tarifa').value = '1000';
+      document.getElementById('nm-fecha').value = new Date().toISOString().split('T')[0];
+      document.getElementById('nm-chk-gps').checked = true;
+      document.getElementById('modal-nueva-mesa').classList.remove('hidden');
+    }
+
+    function cerrarModalNuevaMesa() {
+      document.getElementById('modal-nueva-mesa').classList.add('hidden');
+    }
+
+    function obtenerGpsConFlag(habilitado) {
+      return new Promise(resolve => {
+        if (!habilitado || !navigator.geolocation) return resolve(null);
+        navigator.geolocation.getCurrentPosition(
+          pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          () => resolve(null),
+          { timeout: 4000, enableHighAccuracy: true }
+        );
+      });
+    }
+
+    async function guardarNuevaMesa(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn-guardar-nm');
+      btn.disabled = true;
+      btn.textContent = 'Guardando...';
+
+      const payload = {
+        mesa_num: document.getElementById('nm-mesa').value.trim(),
+        tarifa: Number(document.getElementById('nm-tarifa').value || 1000),
+        senor: document.getElementById('nm-senor').value.trim(),
+        ciudad: document.getElementById('nm-ciudad').value.trim(),
+        lugar: document.getElementById('nm-lugar').value.trim(),
+        calle: document.getElementById('nm-calle').value.trim(),
+        ci: document.getElementById('nm-ci').value.trim(),
+        reloj_inicial: document.getElementById('nm-reloj').value.trim(),
+        fecha_inicial: document.getElementById('nm-fecha').value
+      };
+
+      try {
+        const coords = await obtenerGpsConFlag(document.getElementById('nm-chk-gps').checked);
+        if (coords) {
+          payload.lat = coords.lat;
+          payload.lng = coords.lng;
+          payload.maps_url = `https://www.google.com/maps?q=${coords.lat},${coords.lng}`;
+        }
+
+        if (!navigator.onLine) {
+          const tempId = -Date.now();
+          const cola = leerColaOffline();
+          cola.push({
+            id_local: 'nm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+            tipo: 'nuevo_cliente',
+            temp_id: tempId,
+            payload
+          });
+          guardarColaOffline(cola);
+
+          const nuevoLocal = {
+            id: tempId,
+            mesa_num: payload.mesa_num,
+            senor: payload.senor,
+            ciudad: payload.ciudad,
+            lugar: payload.lugar,
+            calle: payload.calle,
+            ci: payload.ci,
+            tarifa: payload.tarifa,
+            maps_url: payload.maps_url || '',
+            ultimo_reloj: Number(payload.reloj_inicial || 0),
+            ultima_fecha: payload.fecha_inicial,
+            saldo_actual: 0
+          };
+          clientes.unshift(nuevoLocal);
+          if (payload.ciudad && !ciudadesCache.includes(payload.ciudad)) {
+            ciudadesCache.push(payload.ciudad);
+          }
+          guardarCacheClientes(clientes, ciudadesCache);
+          cerrarModalNuevaMesa();
+          renderizarListaMesas(aplicarFiltroLocal(clientes, document.getElementById('buscador').value, document.getElementById('filtro-ciudad').value));
+          alert('⏳ Mesa guardada sin internet en el celular. Se subirá al volver la señal.');
+          return;
+        }
+
+        const res = await fetch('/api/clientes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) return alert(data.error || 'Error al crear la mesa');
+
+        cerrarModalNuevaMesa();
+        await cargarLista();
+        if (data.id) abrirMesa(Number(data.id));
+      } catch {
+        alert('No se pudo guardar. Revisa tu conexión.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Guardar Mesa';
+      }
+    }
+
+    function aplicarAtajoMotivo() {
+      const motivo = document.getElementById('in-motivo').value;
+      if (motivo === 'Reloj sin movimiento (0)' && cliSel && Number(cliSel.ultimo_reloj || 0) > 0) {
+        document.getElementById('in-reloj').value = cliSel.ultimo_reloj;
+        document.getElementById('in-entrega').value = '0';
+        recalcular();
+      } else if (motivo === 'Local cerrado') {
+        document.getElementById('in-entrega').value = '0';
+        recalcular();
+      }
+    }
+
+    function abrirMesa(id) {
+      cliSel = clientes.find(x => x.id === id);
+      if (!cliSel) return;
+      ultimaLecturaGuardada = null;
+
+      document.getElementById('c-mesa').textContent = `Mesa ${cliSel.mesa_num}`;
+      document.getElementById('c-senor').textContent = cliSel.senor;
+      document.getElementById('c-lugar').textContent = `${cliSel.ciudad || ''} ${cliSel.lugar ? '• ' + cliSel.lugar : ''}`;
+      document.getElementById('c-reloj-ant').textContent = fmt(cliSel.ultimo_reloj);
+      document.getElementById('c-tarifa').textContent = fmt(cliSel.tarifa) + ' Gs.';
+      document.getElementById('c-saldo-ant').textContent = fmt(cliSel.saldo_actual) + ' Gs.';
+
+      const btnGps = document.getElementById('c-btn-gps');
+      if (cliSel.maps_url) { btnGps.href = cliSel.maps_url; btnGps.classList.remove('hidden'); }
+      else btnGps.classList.add('hidden');
+
+      document.getElementById('in-reloj').value = '';
+      document.getElementById('in-entrega').value = '0';
+      document.getElementById('in-motivo').value = '';
+      document.getElementById('in-nota').value = '';
+      document.getElementById('in-foto').value = '';
+      document.getElementById('preview-foto').classList.add('hidden');
+      document.getElementById('subtitulo-exito').classList.add('hidden');
+      document.getElementById('btn-wa-exito').classList.remove('hidden');
+
+      const btnFoto = document.getElementById('btn-sacar-foto');
+      btnFoto.textContent = '📷 SACAR FOTO DEL RELOJ';
+      btnFoto.classList.remove('bg-emerald-600', 'hover:bg-emerald-500');
+      btnFoto.classList.add('bg-sky-600', 'hover:bg-sky-500');
+
+      document.getElementById('form-cobro').classList.remove('hidden');
+      document.getElementById('bloque-exito').classList.add('hidden');
+      recalcular();
+      mostrarVista('carga');
+    }
+
+    function mostrarPreviewFoto(input) {
+      const img = document.getElementById('preview-foto');
+      const btn = document.getElementById('btn-sacar-foto');
+      if (input.files && input.files[0]) {
+        img.src = URL.createObjectURL(input.files[0]);
+        img.classList.remove('hidden');
+        btn.textContent = '✅ Foto lista (Tocar para cambiar)';
+        btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
+        btn.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
+      }
+    }
+
+    function recalcular() {
+      if (!cliSel) return;
+      const relojAnt = Number(cliSel.ultimo_reloj || 0);
+      const saldoAnt = Number(cliSel.saldo_actual || 0);
+      const relojNuevo = Number(document.getElementById('in-reloj').value || 0);
+      const entrega = Number(document.getElementById('in-entrega').value || 0);
+      const juegos = (relojAnt > 0 && relojNuevo > relojAnt) ? (relojNuevo - relojAnt) : 0;
+      const total = juegos * Number(cliSel.tarifa || 1000);
+      const saldo = saldoAnt + total - entrega;
+
+      document.getElementById('prev-juegos').textContent = fmt(juegos);
+      document.getElementById('prev-total').textContent = fmt(total) + ' Gs.';
+      document.getElementById('prev-saldo').textContent = fmt(saldo) + ' Gs.';
+    }
+
+    function obtenerGpsActual() {
+      return obtenerGpsConFlag(document.getElementById('chk-gps').checked);
+    }
+
+    function armarObservacion() {
+      const motivo = document.getElementById('in-motivo').value.trim();
+      const nota = document.getElementById('in-nota').value.trim();
+      if (motivo && nota) return `${motivo} — ${nota}`;
+      return motivo || nota || '';
+    }
+
+    function encolarCobroOffline(item, teniaFoto) {
+      const cola = leerColaOffline();
+      cola.push(item);
+      guardarColaOffline(cola);
+
+      const relojAnt = Number(cliSel.ultimo_reloj || 0);
+      const saldoAnt = Number(cliSel.saldo_actual || 0);
+      const relojNuevo = Number(item.reloj);
+      const entrega = Number(item.entrega || 0);
+      const juegos = (relojAnt > 0 && relojNuevo > relojAnt) ? (relojNuevo - relojAnt) : 0;
+      const total = juegos * Number(cliSel.tarifa || 1000);
+      const saldo = saldoAnt + total - entrega;
+
+      cliSel.ultimo_reloj = relojNuevo;
+      cliSel.saldo_actual = saldo;
+      cliSel.ultima_fecha = item.fecha;
+      guardarCacheClientes(clientes, ciudadesCache);
+
+      ultimaLecturaGuardada = {
+        fecha: item.fecha,
+        reloj: relojNuevo,
+        cant_jug: juegos,
+        total_gs: total,
+        entrega: entrega,
+        saldo_resultante: saldo
+      };
+
+      document.getElementById('titulo-exito').textContent = '⏳ Guardado sin internet en el celular';
+      const sub = document.getElementById('subtitulo-exito');
+      sub.textContent = teniaFoto
+        ? 'Se guardó la lectura offline; la foto conviene subirla cuando vuelva la señal.'
+        : 'Se enviará automáticamente cuando vuelva la conexión.';
+      sub.classList.remove('hidden');
+
+      document.getElementById('form-cobro').classList.add('hidden');
+      document.getElementById('bloque-exito').classList.remove('hidden');
+    }
+
+    async function guardarCobro(e) {
+      e.preventDefault();
+      if (Number(cliSel.id) < 0 && !navigator.onLine) {
+        return alert('Esta mesa se creó sin internet; espera a tener señal para sincronizarla y cargar su lectura.');
+      }
+
+      const relojNum = Number(document.getElementById('in-reloj').value);
+      const relojAntNum = Number(cliSel.ultimo_reloj || 0);
+      if (relojAntNum > 0 && relojNum < relojAntNum) {
+        return alert(`El reloj (${relojNum}) no puede ser menor al anterior (${relojAntNum})`);
+      }
+
+      const juegosCalc = (relojAntNum > 0 && relojNum > relojAntNum) ? (relojNum - relojAntNum) : 0;
+      const totalCalc = juegosCalc * Number(cliSel.tarifa || 1000);
+      if (juegosCalc > UMBRAL_SALTO_JUEGOS) {
+        const ok = confirm(
+          `⚠️ Salto alto detectado: se registrarán ${fmt(juegosCalc)} juegos (${fmt(totalCalc)} Gs.) en Mesa ${cliSel.mesa_num}.\n¿El número de reloj (${relojNum}) es correcto?`
+        );
+        if (!ok) return;
+      }
+
+      const btn = document.getElementById('btn-guardar-cobro');
+      btn.disabled = true;
+      btn.textContent = 'Guardando...';
+
+      const fechaStr = new Date().toISOString().split('T')[0];
+      const entregaNum = Number(document.getElementById('in-entrega').value || 0);
+      const obsStr = armarObservacion();
+      const foto = document.getElementById('in-foto').files[0];
+
+      try {
+        const coords = await obtenerGpsActual();
+
+        if (!navigator.onLine) {
+          encolarCobroOffline({
+            id_local: 'lec_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+            tipo: 'lectura',
+            cliente_id: cliSel.id,
+            fecha: fechaStr,
+            reloj: relojNum,
+            entrega: entregaNum,
+            observacion: obsStr,
+            lat: coords ? coords.lat : '',
+            lng: coords ? coords.lng : ''
+          }, Boolean(foto));
+          return;
+        }
+
+        const fd = new FormData();
+        fd.append('cliente_id', cliSel.id);
+        fd.append('fecha', fechaStr);
+        fd.append('reloj', relojNum);
+        fd.append('entrega', entregaNum);
+        fd.append('observacion', obsStr);
+        if (foto) fd.append('foto', foto);
+        if (coords) { fd.append('lat', coords.lat); fd.append('lng', coords.lng); }
+
+        const res = await fetch('/api/cobrador/cargar', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || 'Error al guardar');
+          return;
+        }
+        ultimaLecturaGuardada = data.lectura;
+        document.getElementById('titulo-exito').textContent = '¡Cobro guardado correctamente!';
+        document.getElementById('subtitulo-exito').classList.add('hidden');
+        document.getElementById('form-cobro').classList.add('hidden');
+        document.getElementById('bloque-exito').classList.remove('hidden');
+      } catch {
+        encolarCobroOffline({
+          id_local: 'lec_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+          tipo: 'lectura',
+          cliente_id: cliSel.id,
+          fecha: fechaStr,
+          reloj: relojNum,
+          entrega: entregaNum,
+          observacion: obsStr,
+          lat: '',
+          lng: ''
+        }, Boolean(foto));
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '✅ GUARDAR COBRO';
+      }
+    }
+
+    async function sincronizarColaOffline(silencioso = false) {
+      if (sincronizando || !navigator.onLine) return;
+      const cola = leerColaOffline();
+      if (cola.length === 0) return;
+
+      sincronizando = true;
+      const btn = document.getElementById('btn-sinc-offline');
+      if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
+
+      const mapaTempIds = {};
+      const restantes = [];
+      let enviados = 0;
+
+      try {
+        for (const item of cola) {
+          if (item.tipo === 'nuevo_cliente') {
+            try {
+              const res = await fetch('/api/clientes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(item.payload)
+              });
+              const data = await res.json();
+              if (res.ok && data.id) {
+                mapaTempIds[item.temp_id] = Number(data.id);
+                enviados++;
+              } else {
+                restantes.push(item);
+              }
+            } catch {
+              restantes.push(item);
+            }
+            continue;
+          }
+
+          let cidReal = item.cliente_id;
+          if (Number(cidReal) < 0 && mapaTempIds[cidReal]) {
+            cidReal = mapaTempIds[cidReal];
+          }
+          if (Number(cidReal) < 0) {
+            restantes.push({ ...item, cliente_id: cidReal });
+            continue;
+          }
+
+          const fd = new FormData();
+          fd.append('cliente_id', cidReal);
+          fd.append('fecha', item.fecha);
+          fd.append('reloj', item.reloj);
+          fd.append('entrega', item.entrega);
+          fd.append('observacion', item.observacion || 'Cargado sin internet');
+          if (item.lat && item.lng) {
+            fd.append('lat', item.lat);
+            fd.append('lng', item.lng);
+          }
+          try {
+            const res = await fetch('/api/cobrador/cargar', { method: 'POST', body: fd });
+            if (res.ok) {
+              enviados++;
+            } else {
+              restantes.push(item);
+            }
+          } catch {
+            restantes.push(item);
+          }
+        }
+        guardarColaOffline(restantes);
+        if (!silencioso && enviados > 0) {
+          alert(`Se sincronizaron ${enviados} registro(s) pendiente(s).`);
+        }
+      } finally {
+        sincronizando = false;
+        if (btn) { btn.disabled = false; btn.textContent = '🔄 Sincronizar ahora'; }
+      }
+    }
+
+    function mandarComprobanteWa() {
+      if (!cliSel || !ultimaLecturaGuardada) return;
+      const l = ultimaLecturaGuardada;
+      const obs = armarObservacion();
+      let msg = `Hola ${cliSel.senor}, comprobante de *Juegos Patri* (Mesa N° ${cliSel.mesa_num}):\n• Fecha: ${l.fecha}\n• Reloj: ${cliSel.ultimo_reloj} → ${l.reloj} (${l.cant_jug} juegos)\n• Total: ${fmt(l.total_gs)} Gs.\n• Entrega: ${fmt(l.entrega)} Gs.\n• Saldo: ${fmt(l.saldo_resultante)} Gs.\n`;
+      if (obs) msg += `• Obs: ${obs}\n`;
+      msg += `¡Muchas gracias!`;
+      const nums = (cliSel.calle || '').replace(/\D/g, '');
+      let tel = '';
+      if (nums.startsWith('595')) tel = nums;
+      else if (nums.startsWith('09') && nums.length >= 10) tel = '595' + nums.slice(1, 10);
+      else if (nums.startsWith('9') && nums.length >= 9) tel = '595' + nums.slice(0, 9);
+      window.open(tel ? `https://wa.me/${tel}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    }
+
+    async function abrirRendicion() {
+      mostrarVista('rendicion');
+      if (!navigator.onLine) {
+        document.getElementById('r-fecha').textContent = new Date().toISOString().split('T')[0];
+        document.getElementById('r-lista-cobros').innerHTML = '<div class="p-4 text-center text-xs text-amber-800">Sin internet: los registros pendientes se verán en la rendición al sincronizar.</div>';
+        return;
+      }
+      const res = await fetch('/api/cobrador/rendicion');
+      const d = await res.json();
+      document.getElementById('r-fecha').textContent = d.fecha;
+      document.getElementById('r-cobrado').textContent = fmt(d.total_cobrado) + ' Gs.';
+      document.getElementById('r-gastos').textContent = fmt(d.total_gastos) + ' Gs.';
+      document.getElementById('r-neto').textContent = fmt(d.neto_a_rendir) + ' Gs.';
+
+      document.getElementById('r-lista-cobros').innerHTML = d.cobros.length
+        ? d.cobros.map(c => `
+            <div class="p-3 flex justify-between items-center text-xs">
+              <div>
+                <span class="font-extrabold bg-slate-900 text-white px-1.5 py-0.5 rounded">Mesa ${c.mesa_num}</span>
+                <strong class="ml-1">${c.senor}</strong>
+                <div class="text-[11px] text-slate-500 mt-0.5">Reloj: ${c.reloj} (${c.cant_jug} jug.)${c.observacion ? ' • ' + c.observacion : ''}</div>
+              </div>
+              <strong class="text-emerald-700 text-sm">${fmt(c.entrega)} Gs.</strong>
+            </div>
+          `).join('')
+        : '<div class="p-4 text-center text-xs text-slate-400">Aún no hay cobros cargados hoy.</div>';
+    }
+
+    async function guardarGastoCobrador(e) {
+      e.preventDefault();
+      if (!navigator.onLine) {
+        return alert('Necesitas conexión a internet para registrar gastos en el servidor.');
+      }
+      await fetch('/api/gastos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fecha: new Date().toISOString().split('T')[0],
+          categoria: document.getElementById('g-cat').value,
+          monto: document.getElementById('g-monto').value,
+          descripcion: document.getElementById('g-desc').value
+        })
+      });
+      document.getElementById('g-monto').value = '';
+      document.getElementById('g-desc').value = '';
+      await abrirRendicion();
+    }
+
+    window.addEventListener('beforeunload', (e) => {
+      if (leerColaOffline().length > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
+
+    window.addEventListener('online', async () => {
+      actualizarIndicadorRed();
+      await sincronizarColaOffline(false);
+      cargarLista();
+    });
+    window.addEventListener('offline', actualizarIndicadorRed);
+
+    cargarLista();
+  </script>
+</body>
+</html>

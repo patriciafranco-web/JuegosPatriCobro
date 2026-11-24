@@ -1,0 +1,1675 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Juegos Patri — Ficha y Control</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Caveat:wght@600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+
+    .handwriting {
+      font-family: 'Caveat', cursive;
+      font-size: 1.28rem;
+      line-height: 1;
+      color: #0f172a;
+    }
+
+    .pin-ruta {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 9999px;
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 12px;
+      border: 2.5px solid #ffffff;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+    }
+
+    /* FICHA ROSADA TAMAÑO CUADERNO 160mm x 215mm */
+    .ficha-160x215 {
+      width: 160mm;
+      height: 215mm;
+      background-color: #f4a4b0;
+      color: #111111;
+      padding: 6mm 6.5mm 5mm 6.5mm;
+      box-sizing: border-box;
+      border: 1.5px solid #111111;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .ficha-tabla {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    .ficha-tabla th,
+    .ficha-tabla td {
+      border: 1.1pt solid #111111;
+      text-align: center;
+      padding: 0 2px;
+      overflow: hidden;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+    .ficha-tabla th {
+      font-size: 7.5pt;
+      font-weight: 800;
+      height: 6.5mm;
+    }
+    .ficha-tabla td {
+      height: 6.5mm;
+      font-size: 8.8pt;
+    }
+
+    @media print {
+      @page {
+        size: 160mm 215mm;
+        margin: 0;
+      }
+      html, body {
+        width: 160mm;
+        height: 215mm;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        overflow: hidden !important;
+      }
+      body * { visibility: hidden; }
+      #zona-impresion, #zona-impresion * { visibility: visible; }
+      #zona-impresion {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 160mm;
+        height: 215mm;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      .ficha-160x215 {
+        width: 160mm !important;
+        height: 215mm !important;
+        background-color: #ffffff !important;
+        border: none !important;
+        box-shadow: none !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-200 text-slate-800 h-screen flex flex-col overflow-hidden">
+
+  <!-- BARRA SUPERIOR -->
+  <header class="bg-slate-900 text-white px-4 py-2 flex items-center justify-between shadow shrink-0 gap-2">
+    <div class="flex items-center gap-2.5 shrink-0 cursor-pointer" onclick="mostrarModulo('principal')">
+      <div class="bg-emerald-600 text-white font-black px-2.5 py-1 rounded-lg text-sm">JP</div>
+      <div>
+        <h1 class="font-bold text-sm leading-tight">JUEGOS PATRI</h1>
+        <p class="text-[10px] text-slate-400">Control, Fichas y Rutas</p>
+      </div>
+    </div>
+
+    <div class="hidden 2xl:flex items-center gap-2 text-xs">
+      <div class="bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
+        <span class="text-slate-400">Mesas:</span>
+        <strong id="kpi-mesas" class="text-white ml-1">0</strong>
+      </div>
+      <div class="bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
+        <span class="text-slate-400">Con saldo:</span>
+        <strong id="kpi-deudores" class="text-amber-400 ml-1">0</strong>
+      </div>
+      <div class="bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
+        <span class="text-slate-400">A cobrar:</span>
+        <strong id="kpi-cartera" class="text-emerald-400 ml-1">0 Gs.</strong>
+      </div>
+      <div class="bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
+        <span class="text-slate-400">📍 GPS:</span>
+        <strong id="kpi-con-gps" class="text-sky-400 ml-1">0</strong>
+        <span class="text-slate-500 mx-1">/</span>
+        <span class="text-slate-400">Sin:</span>
+        <strong id="kpi-sin-gps" class="text-rose-400 ml-1">0</strong>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-1.5 flex-wrap justify-end">
+      <button onclick="abrirVistaDashboard()" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg">📊 Caja</button>
+      <button onclick="abrirVistaInventario()" class="bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg">📦 Inventario</button>
+      <button onclick="abrirVistaColaWa()" class="bg-green-600 hover:bg-green-500 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg">💬 Cola WA</button>
+      <button onclick="abrirVistaMapa()" class="bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg">🗺️ Mapa</button>
+      <button onclick="abrirVistaCiudades()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg">🏙️ Ciudades</button>
+      <button onclick="abrirModalNuevoCliente()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg">+ Mesa</button>
+      <a href="/api/exportar-excel" class="bg-teal-700 hover:bg-teal-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg">📥 Excel</a>
+      <a href="/api/descargar-db" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-medium px-2 py-1.5 rounded-lg">.DB</a>
+      <a href="/cobrador" class="bg-slate-600 hover:bg-slate-500 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg">📱 Cobrador</a>
+      <a href="/logout" title="Cerrar sesión" class="bg-rose-700 hover:bg-rose-600 text-white text-xs font-bold px-2 py-1.5 rounded-lg">🚪</a>
+    </div>
+  </header>
+
+  <!-- ========================================================= -->
+  <!-- MÓDULO 1: DIRECTORIO + FICHA ROSADA COMPLETADA            -->
+  <!-- ========================================================= -->
+  <div id="modulo-principal" class="flex flex-1 overflow-hidden">
+
+    <!-- LISTA DE CLIENTES -->
+    <aside class="w-80 bg-white border-r border-slate-300 flex flex-col shrink-0">
+      <div class="p-2.5 border-b border-slate-200 space-y-2 bg-slate-50">
+        <input id="buscador" type="text" oninput="filtrarClientes()"
+          placeholder="Buscar mesa, señor, lugar..."
+          class="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+        <select id="filtro-ciudad" onchange="filtrarClientes()"
+          class="w-full text-xs px-2 py-1.5 bg-white border border-slate-300 rounded-lg">
+          <option value="">Todas las ciudades</option>
+        </select>
+        <div class="flex gap-1.5">
+          <label class="flex-1 flex items-center justify-center gap-1.5 text-xs bg-white border border-slate-300 px-2 py-1 rounded-lg cursor-pointer">
+            <input id="filtro-deuda" type="checkbox" onchange="filtrarClientes()" class="accent-amber-600" />
+            <span>Con saldo</span>
+          </label>
+          <label class="flex-1 flex items-center justify-center gap-1.5 text-xs bg-white border border-slate-300 px-2 py-1 rounded-lg cursor-pointer">
+            <input id="filtro-sin-gps" type="checkbox" onchange="filtrarClientes()" class="accent-rose-600" />
+            <span>Sin GPS</span>
+          </label>
+        </div>
+      </div>
+      <div id="lista-clientes" class="flex-1 overflow-y-auto divide-y divide-slate-100"></div>
+    </aside>
+
+    <!-- ÁREA PRINCIPAL: FICHA ROSADA + PANEL DE CARGA -->
+    <main class="flex-1 overflow-y-auto p-4">
+      <div id="vista-vacia" class="h-full flex flex-col items-center justify-center text-slate-500 text-center">
+        <p class="text-base font-bold">Selecciona un cliente de la izquierda o usa los módulos de arriba</p>
+        <p class="text-xs mt-1">Ficha rosada, fotos de respaldo, contrato A4, mapa GPS, caja e inventario en un solo lugar</p>
+      </div>
+
+      <div id="vista-cliente" class="hidden max-w-6xl mx-auto flex flex-col xl:flex-row items-start justify-center gap-5">
+
+        <!-- COLUMNA CENTRAL: BOTONES + FICHA ROSADA -->
+        <div class="flex flex-col items-center shrink-0">
+          <div class="w-[160mm] bg-white rounded-xl border border-slate-300 px-3 py-2 mb-3 flex flex-wrap items-center justify-between gap-2 shadow-sm">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span id="badge-tarifa" class="bg-slate-100 text-slate-800 font-bold text-xs px-2 py-1 rounded-md border">1.000 Gs./jug</span>
+              <button onclick="abrirModalEditarCliente()" class="px-2 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg">Editar</button>
+              <button onclick="abrirModalMantenimiento()" class="px-2 py-1.5 text-xs font-bold bg-violet-100 hover:bg-violet-200 text-violet-800 rounded-lg">🔧 (<span id="badge-cant-mant">0</span>)</button>
+              <button onclick="abrirModalFotos()" class="px-2 py-1.5 text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg">📷 Fotos (<span id="badge-cant-fotos">0</span>)</button>
+              <button onclick="imprimirContrato()" class="px-2 py-1.5 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white rounded-lg">📜 Contrato</button>
+              <a id="btn-abrir-maps" href="#" target="_blank" rel="noopener noreferrer"
+                 class="hidden px-2 py-1.5 text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white rounded-lg shadow-sm">📍 GPS</a>
+            </div>
+
+            <div class="flex items-center gap-1.5">
+              <button onclick="imprimirCompletada()" class="px-2.5 py-1.5 text-xs font-extrabold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow-sm">🖨️ Ficha</button>
+              <button onclick="imprimirEnBlanco()" class="px-2.5 py-1.5 text-xs font-extrabold bg-rose-600 hover:bg-rose-500 text-white rounded-lg shadow-sm">📄 Blanco</button>
+            </div>
+          </div>
+
+          <!-- FICHA ROSADA 160x215mm -->
+          <div id="zona-impresion">
+            <div class="ficha-160x215">
+              <div>
+                <div class="flex items-start justify-between gap-2">
+                  <div class="w-[46mm] flex flex-col items-center">
+                    <svg viewBox="0 0 220 130" class="w-full h-[23mm]">
+                      <polygon points="32,74 44,74 44,122 32,118" fill="#181818"/>
+                      <polygon points="104,95 117,95 117,128 104,128" fill="#181818"/>
+                      <polygon points="184,65 195,65 195,112 184,115" fill="#181818"/>
+                      <polygon points="22,55 110,82 110,103 22,74" fill="#2a2a2a" stroke="#111" stroke-width="1.5"/>
+                      <polygon points="110,82 202,48 202,68 110,103" fill="#1b1b1b" stroke="#111" stroke-width="1.5"/>
+                      <polygon points="16,49 112,18 208,44 110,82" fill="#3a3a3a" stroke="#111" stroke-width="1.8"/>
+                      <polygon points="31,49 112,23 193,44 110,74" fill="#6b6b6b" stroke="#111" stroke-width="1.2"/>
+                      <ellipse cx="32" cy="49" rx="4" ry="2.5" fill="#000"/>
+                      <ellipse cx="112" cy="23" rx="4" ry="2.2" fill="#000"/>
+                      <ellipse cx="192" cy="44" rx="4" ry="2.5" fill="#000"/>
+                      <ellipse cx="110" cy="74" rx="4.5" ry="2.6" fill="#000"/>
+                      <circle cx="95" cy="48" r="3" fill="#fff"/>
+                      <circle cx="118" cy="43" r="3" fill="#111"/>
+                      <circle cx="125" cy="46" r="3" fill="#222"/>
+                      <circle cx="115" cy="50" r="3" fill="#111"/>
+                    </svg>
+                    <div class="w-full text-[9pt] font-bold mt-0.5 flex items-baseline">
+                      <span>MESA N°</span>
+                      <span id="f-mesa" class="flex-1 border-b border-dotted border-black text-center handwriting ml-1"></span>
+                    </div>
+                  </div>
+
+                  <div class="flex-1 text-center pt-0.5">
+                    <div class="text-[18pt] font-black tracking-tight leading-none">JUEGOS PATRI</div>
+                    <div class="text-[10.5pt] font-extrabold tracking-wide mt-1">FABRICA DE VILLAR</div>
+                    <div class="text-[8.2pt] font-bold mt-1.5">Tel: (0981) 047 851 - (0981) 896 020</div>
+                    <div class="text-[8.8pt] font-bold mt-1">Ciudad Pdte. Franco - Paraguay</div>
+                  </div>
+                </div>
+
+                <div class="border-t-[1.5pt] border-black mt-1.5"></div>
+                <div class="border-t-[0.8pt] border-black mt-[1.5pt] mb-2"></div>
+
+                <div class="space-y-1.5 text-[9pt] font-bold">
+                  <div class="flex gap-3">
+                    <div class="w-[54%] flex items-baseline">
+                      <span>Señor</span>
+                      <span id="f-senor" class="flex-1 border-b border-black ml-1.5 px-1 handwriting"></span>
+                    </div>
+                    <div class="w-[46%] flex items-baseline">
+                      <span>Ciudad</span>
+                      <span id="f-ciudad" class="flex-1 border-b border-black ml-1.5 px-1 handwriting"></span>
+                    </div>
+                  </div>
+                  <div class="flex gap-3">
+                    <div class="w-[54%] flex items-baseline">
+                      <span>Calle</span>
+                      <span id="f-calle" class="flex-1 border-b border-black ml-1.5 px-1 handwriting"></span>
+                    </div>
+                    <div class="w-[46%] flex items-baseline">
+                      <span>Lugar</span>
+                      <span id="f-lugar" class="flex-1 border-b border-black ml-1.5 px-1 handwriting"></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <table class="ficha-tabla my-1.5">
+                <thead>
+                  <tr>
+                    <th style="width: 17%">FECHA</th>
+                    <th style="width: 17%">RELOJ N°</th>
+                    <th style="width: 16%">CANT.JUG.</th>
+                    <th style="width: 18%">TOTAL GS.</th>
+                    <th style="width: 16%">ENTREGA</th>
+                    <th style="width: 16%">A COBRAR</th>
+                  </tr>
+                </thead>
+                <tbody id="f-tbody"></tbody>
+              </table>
+
+              <div class="text-[8.5pt] font-bold space-y-2">
+                <div class="text-center">Sr. Cliente la mesa de Villar queda a su entera Responsabilidad.</div>
+                <div class="flex justify-between items-end pt-1">
+                  <div class="w-[54%] flex items-baseline">
+                    <span>Documento N° C.I</span>
+                    <span id="f-ci" class="flex-1 border-b border-dotted border-black ml-1 px-1 handwriting"></span>
+                  </div>
+                  <div class="w-[40%] text-center">
+                    <div class="border-b border-dotted border-black h-4"></div>
+                    <div class="mt-0.5">Firma del Titular</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- COLUMNA DERECHA: CARGA AUTOMÁTICA + WHATSAPP + EDICIÓN -->
+        <div class="w-full xl:w-72 bg-white rounded-xl border border-slate-300 p-4 shadow-sm space-y-4 shrink-0">
+          <div>
+            <h3 class="text-sm font-extrabold text-slate-900">Cargar Lectura en Ficha</h3>
+            <p class="text-[11px] text-slate-500 mt-0.5">
+              Reloj anterior: <strong id="lbl-reloj-ant" class="text-slate-900">0</strong>
+            </p>
+          </div>
+
+          <form onsubmit="guardarLectura(event)" class="space-y-3 text-xs">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Fecha</label>
+              <input id="in-fecha" type="date" required class="w-full px-2.5 py-2 border border-slate-300 rounded-lg" />
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Reloj N° Actual</label>
+              <input id="in-reloj" type="number" required oninput="recalcularPreview()" placeholder="Ej: 40350"
+                class="w-full px-2.5 py-2 text-sm font-extrabold border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500" />
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-lg border">
+              <div>
+                <span class="block text-[10px] text-slate-500">Cant. Jug.</span>
+                <strong id="prev-juegos" class="text-sm font-extrabold text-slate-900">0</strong>
+              </div>
+              <div>
+                <span class="block text-[10px] text-slate-500">Total Gs.</span>
+                <strong id="prev-total" class="text-sm font-extrabold text-blue-700">0</strong>
+              </div>
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Entrega (Gs.)</label>
+              <input id="in-entrega" type="number" value="0" min="0" oninput="recalcularPreview()"
+                class="w-full px-2.5 py-2 font-bold border border-slate-300 rounded-lg" />
+            </div>
+
+            <div class="bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex justify-between items-center">
+              <span class="font-semibold text-amber-900">A Cobrar:</span>
+              <strong id="prev-saldo" class="text-sm font-black text-amber-700">0 Gs.</strong>
+            </div>
+
+            <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-2.5 rounded-lg shadow-sm">
+              + Agregar a la Ficha
+            </button>
+          </form>
+
+          <div class="pt-3 border-t border-slate-200 space-y-2">
+            <label class="block text-[11px] font-bold text-slate-600">WhatsApp 1 clic:</label>
+            <button type="button" onclick="enviarWhatsappComprobante()"
+              class="w-full text-xs font-extrabold bg-green-600 hover:bg-green-500 text-white py-2 rounded-lg shadow-sm">
+              💬 Enviar Comprobante
+            </button>
+            <button id="btn-wa-pedir-gps" type="button" onclick="enviarWhatsappPedirGps()"
+              class="hidden w-full text-xs font-bold bg-sky-100 hover:bg-sky-200 text-sky-900 border border-sky-300 py-2 rounded-lg">
+              📍 Pedir Ubicación por WhatsApp
+            </button>
+          </div>
+
+          <div class="pt-3 border-t border-slate-200 space-y-2">
+            <label class="block text-[11px] font-bold text-slate-600">Corregir una fila cargada:</label>
+            <select id="sel-editar-fila" class="w-full text-xs px-2 py-1.5 border border-slate-300 rounded-lg bg-white"></select>
+            <div class="flex gap-2">
+              <button type="button" onclick="abrirModalEditarFila()" class="flex-1 text-xs font-bold text-slate-800 hover:bg-slate-100 border border-slate-300 py-1.5 rounded-lg">Editar fila</button>
+              <button type="button" onclick="borrarUltimaLectura()" class="flex-1 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 py-1.5 rounded-lg">Borrar última</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- MÓDULO 2: LISTA POR CIUDADES                              -->
+  <!-- ========================================================= -->
+  <div id="modulo-ciudades" class="hidden flex-1 flex overflow-hidden bg-slate-100">
+    <aside class="w-72 bg-white border-r border-slate-300 flex flex-col shrink-0">
+      <div class="p-3 border-b border-slate-200 bg-slate-50 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-extrabold uppercase tracking-wider text-slate-700">Ciudades</span>
+          <button onclick="mostrarModulo('principal')" class="text-xs font-bold text-slate-600 hover:text-slate-900">← Volver</button>
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-500 mb-1">Tope en 3 meses (90 días):</label>
+          <select id="sel-umbral-juegos" onchange="cargarVistaCiudades()"
+            class="w-full text-xs font-bold px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg">
+            <option value="60" selected>Menos de 60 juegos en 3 meses</option>
+            <option value="50">Menos de 50 juegos en 3 meses</option>
+          </select>
+        </div>
+      </div>
+      <div id="lista-ciudades-menu" class="flex-1 overflow-y-auto divide-y divide-slate-100"></div>
+    </aside>
+    <main class="flex-1 overflow-y-auto p-6">
+      <div id="detalle-ciudad-contenido" class="max-w-5xl mx-auto space-y-6"></div>
+    </main>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- MÓDULO 3: MAPA GENERAL GPS Y RUTAS DE VIAJE POR CIUDAD    -->
+  <!-- ========================================================= -->
+  <div id="modulo-mapa" class="hidden flex-1 flex overflow-hidden bg-slate-100">
+    <aside class="w-96 bg-white border-r border-slate-300 flex flex-col shrink-0">
+      <div class="p-3 border-b border-slate-200 bg-slate-50 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-extrabold uppercase tracking-wider text-slate-800">🗺️ Mapa GPS y Rutas</span>
+          <button onclick="mostrarModulo('principal')" class="text-xs font-bold text-slate-600 hover:text-slate-900">← Volver</button>
+        </div>
+
+        <div id="alerta-sync-gps" class="hidden bg-amber-50 border border-amber-300 rounded-lg p-2.5 text-xs space-y-1.5">
+          <p class="font-bold text-amber-900">Tienes <span id="lbl-pendientes-sync">0</span> links de Maps sin coordenadas extraídas.</p>
+          <button onclick="sincronizarGpsExistentes()" id="btn-sync-gps"
+            class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-1.5 rounded-lg text-xs">
+            🔄 Sincronizar Links al Mapa
+          </button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-600 mb-1">Ciudad:</label>
+            <select id="mapa-filtro-ciudad" onchange="renderizarMapaYRuta()" class="w-full text-xs font-semibold px-2 py-1.5 bg-white border border-slate-300 rounded-lg">
+              <option value="">Todas las ciudades</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-600 mb-1">Mostrar:</label>
+            <select id="mapa-filtro-estado" onchange="renderizarMapaYRuta()" class="w-full text-xs font-semibold px-2 py-1.5 bg-white border border-slate-300 rounded-lg">
+              <option value="todos">Todas con GPS</option>
+              <option value="saldo">Solo con saldo</option>
+              <option value="2m">Sin visita +2 meses</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-600 mb-1">Empezar ruta desde:</label>
+          <select id="mapa-punto-inicio" onchange="renderizarMapaYRuta()" class="w-full text-xs px-2 py-1.5 bg-white border border-slate-300 rounded-lg">
+            <option value="">Automático (primer cliente de la zona)</option>
+          </select>
+        </div>
+
+        <div id="contenedor-tramos-maps" class="space-y-1.5 pt-1"></div>
+
+        <div class="flex items-center justify-between text-[10px] font-bold text-slate-600 pt-1 border-t border-slate-200">
+          <span>🟢 Al día</span>
+          <span>🟠 Con saldo</span>
+          <span>🔴 +2 meses</span>
+          <span id="lbl-total-paradas" class="text-slate-900">0 paradas</span>
+        </div>
+      </div>
+      <div id="lista-paradas-ruta" class="flex-1 overflow-y-auto divide-y divide-slate-100"></div>
+    </aside>
+
+    <main class="flex-1 relative">
+      <div id="mapa-leaflet" class="w-full h-full z-0"></div>
+    </main>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- MÓDULO 4: DASHBOARD DE CAJA, GASTOS Y RANKING             -->
+  <!-- ========================================================= -->
+  <div id="modulo-dashboard" class="hidden flex-1 overflow-y-auto bg-slate-100 p-6">
+    <div class="max-w-6xl mx-auto space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-2xl font-black text-slate-900">📊 Caja de Viaje, Gastos y Ranking</h2>
+          <p class="text-xs text-slate-500">Control real de recaudación, gastos de gira, ganancia neta y rendimiento</p>
+        </div>
+        <button onclick="mostrarModulo('principal')" class="px-4 py-2 text-xs font-bold bg-slate-900 text-white rounded-lg">← Volver</button>
+      </div>
+
+      <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <span class="text-[11px] font-bold uppercase text-slate-500">Cobrado Hoy</span>
+          <strong id="dash-hoy" class="block text-xl font-black text-slate-900 mt-1">0 Gs.</strong>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <span class="text-[11px] font-bold uppercase text-slate-500">Esta Semana</span>
+          <strong id="dash-semana" class="block text-xl font-black text-blue-700 mt-1">0 Gs.</strong>
+        </div>
+        <div class="bg-white rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 shadow-sm">
+          <span class="text-[11px] font-bold uppercase text-emerald-700">Cobrado en el Mes</span>
+          <strong id="dash-mes" class="block text-xl font-black text-emerald-700 mt-1">0 Gs.</strong>
+        </div>
+        <div class="bg-white rounded-xl border border-rose-200 bg-rose-50/40 p-4 shadow-sm">
+          <span class="text-[11px] font-bold uppercase text-rose-700">Gastos + Mant. Mes</span>
+          <strong id="dash-gastos" class="block text-xl font-black text-rose-700 mt-1">0 Gs.</strong>
+        </div>
+        <div class="bg-slate-900 text-white rounded-xl p-4 shadow-sm">
+          <span class="text-[11px] font-bold uppercase text-slate-400">Ganancia Neta Mes</span>
+          <strong id="dash-neto" class="block text-xl font-black text-emerald-400 mt-1">0 Gs.</strong>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-200">
+            <h3 class="text-sm font-extrabold text-slate-800">🏙️ Recaudación del Mes por Ciudad</h3>
+          </div>
+          <div id="dash-por-ciudad" class="divide-y divide-slate-100 max-h-72 overflow-y-auto"></div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-200">
+            <h3 class="text-sm font-extrabold text-slate-800">⛽ Registrar Gasto de Gira</h3>
+          </div>
+          <form onsubmit="guardarGasto(event)" class="p-4 grid grid-cols-2 gap-2.5 text-xs border-b border-slate-200 bg-slate-50/50">
+            <div>
+              <label class="block font-bold text-slate-600 mb-1">Fecha</label>
+              <input id="gasto-fecha" type="date" required class="w-full px-2.5 py-1.5 border rounded-lg bg-white" />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-600 mb-1">Categoría</label>
+              <select id="gasto-cat" class="w-full px-2.5 py-1.5 border rounded-lg bg-white">
+                <option value="Combustible">Combustible</option>
+                <option value="Peaje">Peaje</option>
+                <option value="Viático / Comida">Viático / Comida</option>
+                <option value="Repuestos">Repuestos</option>
+                <option value="Otro">Otro</option>
+              </select>
+            </div>
+            <div>
+              <label class="block font-bold text-slate-600 mb-1">Ciudad / Ruta</label>
+              <input id="gasto-ciudad" placeholder="Ej: Encarnación" class="w-full px-2.5 py-1.5 border rounded-lg bg-white" />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-600 mb-1">Monto (Gs.) *</label>
+              <input id="gasto-monto" type="number" min="1" required placeholder="Ej: 150000" class="w-full px-2.5 py-1.5 border rounded-lg bg-white font-bold" />
+            </div>
+            <div class="col-span-2 flex gap-2">
+              <input id="gasto-desc" placeholder="Detalle opcional" class="flex-1 px-2.5 py-1.5 border rounded-lg bg-white" />
+              <button type="submit" class="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-extrabold rounded-lg">+ Cargar</button>
+            </div>
+          </form>
+          <div id="dash-lista-gastos" class="divide-y divide-slate-100 max-h-56 overflow-y-auto"></div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div class="bg-white rounded-xl border-2 border-emerald-300 shadow-sm overflow-hidden">
+          <div class="px-4 py-3 bg-emerald-50 border-b border-emerald-200">
+            <h3 class="text-sm font-extrabold text-emerald-900">🏆 Top 10 Mejores Mesas (Últimos 3 Meses)</h3>
+          </div>
+          <div id="dash-top-mesas" class="divide-y divide-slate-100"></div>
+        </div>
+        <div class="bg-white rounded-xl border-2 border-rose-300 shadow-sm overflow-hidden">
+          <div class="px-4 py-3 bg-rose-50 border-b border-rose-200">
+            <h3 class="text-sm font-extrabold text-rose-900">⚠️ Candidatas a Retiro (&lt;50 jug./3m + Atraso o Saldo)</h3>
+          </div>
+          <div id="dash-retirar" class="divide-y divide-slate-100 max-h-96 overflow-y-auto"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- MÓDULO 5: INVENTARIO DE DEPÓSITO Y VENTAS DIRECTAS        -->
+  <!-- ========================================================= -->
+  <div id="modulo-inventario" class="hidden flex-1 overflow-y-auto bg-slate-100 p-6">
+    <div class="max-w-6xl mx-auto space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-2xl font-black text-slate-900">📦 Inventario de Depósito y Ventas Directas</h2>
+          <p class="text-xs text-slate-500">Control del 100% de tu flota: en calle, depósito, taller y mesas vendidas</p>
+        </div>
+        <button onclick="mostrarModulo('principal')" class="px-4 py-2 text-xs font-bold bg-slate-900 text-white rounded-lg">← Volver</button>
+      </div>
+
+      <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div class="bg-white rounded-xl border p-4 shadow-sm">
+          <span class="text-[11px] font-bold uppercase text-slate-500">En Calle (Alquiladas)</span>
+          <strong id="inv-alquiladas" class="block text-2xl font-black text-emerald-700 mt-1">0</strong>
+        </div>
+        <div class="bg-white rounded-xl border p-4 shadow-sm">
+          <span class="text-[11px] font-bold uppercase text-slate-500">En Depósito</span>
+          <strong id="inv-deposito" class="block text-2xl font-black text-indigo-700 mt-1">0</strong>
+        </div>
+        <div class="bg-white rounded-xl border p-4 shadow-sm">
+          <span class="text-[11px] font-bold uppercase text-slate-500">En Reparación</span>
+          <strong id="inv-reparacion" class="block text-2xl font-black text-amber-600 mt-1">0</strong>
+        </div>
+        <div class="bg-white rounded-xl border p-4 shadow-sm">
+          <span class="text-[11px] font-bold uppercase text-slate-500">Vendidas</span>
+          <strong id="inv-vendidas" class="block text-2xl font-black text-purple-700 mt-1">0</strong>
+        </div>
+        <div class="bg-slate-900 text-white rounded-xl p-4 shadow-sm">
+          <span class="text-[11px] font-bold uppercase text-slate-400">Pendiente Ventas</span>
+          <strong id="inv-pendiente-ventas" class="block text-xl font-black text-amber-400 mt-1">0 Gs.</strong>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+        <h3 class="text-sm font-extrabold text-slate-800 mb-3">+ Registrar Mesa en Depósito, Taller o Venta Directa</h3>
+        <form onsubmit="guardarInventario(event)" class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+          <div>
+            <label class="block font-bold mb-1">Mesa N° / Código *</label>
+            <input id="inv-mesa" required placeholder="Ej: DEP-12" class="w-full px-2.5 py-1.5 border rounded-lg" />
+          </div>
+          <div>
+            <label class="block font-bold mb-1">Estado *</label>
+            <select id="inv-estado" class="w-full px-2.5 py-1.5 border rounded-lg font-bold">
+              <option value="Depósito">Depósito</option>
+              <option value="En Reparación">En Reparación</option>
+              <option value="Vendida">Vendida</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold mb-1">Modelo / Paño</label>
+            <input id="inv-modelo" placeholder="Ej: Profesional Verde" class="w-full px-2.5 py-1.5 border rounded-lg" />
+          </div>
+          <div>
+            <label class="block font-bold mb-1">Fecha</label>
+            <input id="inv-fecha" type="date" class="w-full px-2.5 py-1.5 border rounded-lg" />
+          </div>
+          <div>
+            <label class="block font-bold mb-1">Comprador (si se vendió)</label>
+            <input id="inv-comprador" placeholder="Nombre del comprador" class="w-full px-2.5 py-1.5 border rounded-lg" />
+          </div>
+          <div>
+            <label class="block font-bold mb-1">Teléfono</label>
+            <input id="inv-tel" placeholder="0981..." class="w-full px-2.5 py-1.5 border rounded-lg" />
+          </div>
+          <div>
+            <label class="block font-bold mb-1">Precio Venta (Gs.)</label>
+            <input id="inv-precio" type="number" min="0" value="0" class="w-full px-2.5 py-1.5 border rounded-lg font-bold" />
+          </div>
+          <div>
+            <label class="block font-bold mb-1">Entregado / Pagado (Gs.)</label>
+            <input id="inv-pagado" type="number" min="0" value="0" class="w-full px-2.5 py-1.5 border rounded-lg font-bold" />
+          </div>
+          <div class="col-span-2 md:col-span-3">
+            <input id="inv-obs" placeholder="Observación (ej: Falta cambiar paño, vendida en 2 cuotas...)" class="w-full px-2.5 py-1.5 border rounded-lg" />
+          </div>
+          <div>
+            <button type="submit" class="w-full py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-extrabold rounded-lg">+ Guardar</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 bg-slate-50 border-b flex items-center justify-between">
+          <h3 class="text-sm font-extrabold text-slate-800">Listado de Depósito, Taller y Ventas</h3>
+          <select id="inv-filtro-estado" onchange="renderizarTablaInventario()" class="text-xs px-2.5 py-1 border rounded-lg bg-white font-bold">
+            <option value="">Todos los estados</option>
+            <option value="Depósito">Solo Depósito</option>
+            <option value="En Reparación">Solo En Reparación</option>
+            <option value="Vendida">Solo Vendidas</option>
+          </select>
+        </div>
+        <div id="lista-inventario" class="divide-y divide-slate-100"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- MÓDULO 6: COLA RÁPIDA DE RECORDATORIOS POR WHATSAPP       -->
+  <!-- ========================================================= -->
+  <div id="modulo-cola-wa" class="hidden flex-1 overflow-y-auto bg-slate-100 p-6">
+    <div class="max-w-6xl mx-auto space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-2xl font-black text-slate-900">💬 Cola Rápida de Mensajes por WhatsApp</h2>
+          <p class="text-xs text-slate-500">Envía recordatorios de pago o pedidos de ubicación uno tras otro sin abrir cada ficha</p>
+        </div>
+        <button onclick="mostrarModulo('principal')" class="px-4 py-2 text-xs font-bold bg-slate-900 text-white rounded-lg">← Volver</button>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div class="bg-white rounded-xl border-2 border-amber-300 shadow-sm overflow-hidden">
+          <div class="px-4 py-3 bg-amber-50 border-b border-amber-200 flex justify-between items-center">
+            <h3 class="text-sm font-extrabold text-amber-900">💰 Recordatorio de Saldo Pendiente (<span id="wa-cnt-saldo">0</span>)</h3>
+          </div>
+          <div id="cola-wa-saldo" class="divide-y divide-slate-100 max-h-[70vh] overflow-y-auto"></div>
+        </div>
+
+        <div class="bg-white rounded-xl border-2 border-sky-300 shadow-sm overflow-hidden">
+          <div class="px-4 py-3 bg-sky-50 border-b border-sky-200 flex justify-between items-center">
+            <h3 class="text-sm font-extrabold text-sky-900">📍 Pedir Ubicación Google Maps (<span id="wa-cnt-gps">0</span>)</h3>
+          </div>
+          <div id="cola-wa-gps" class="divide-y divide-slate-100 max-h-[70vh] overflow-y-auto"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL NUEVO / EDITAR CLIENTE -->
+  <div id="modal-cliente" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl max-w-lg w-full p-5 shadow-xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 id="modal-titulo" class="font-bold text-base">Nueva Mesa / Cliente</h3>
+        <button onclick="cerrarModalCliente()" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+      </div>
+      <form onsubmit="guardarCliente(event)" class="grid grid-cols-2 gap-3 text-sm">
+        <input type="hidden" id="cli-id" />
+        <div>
+          <label class="block text-xs font-semibold mb-1">Mesa N° *</label>
+          <input id="cli-mesa" required class="w-full px-3 py-1.5 border rounded-lg" placeholder="Ej: 2000" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Tarifa por Juego (Gs.) *</label>
+          <select id="cli-tarifa" class="w-full px-3 py-1.5 border rounded-lg">
+            <option value="1000">1.000 Gs. por juego</option>
+            <option value="750">750 Gs. por juego</option>
+            <option value="500">500 Gs. por juego</option>
+            <option value="1500">1.500 Gs. por juego</option>
+            <option value="2000">2.000 Gs. por juego</option>
+          </select>
+        </div>
+        <div class="col-span-2">
+          <label class="block text-xs font-semibold mb-1">Señor (Cliente) *</label>
+          <input id="cli-senor" required class="w-full px-3 py-1.5 border rounded-lg" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Ciudad</label>
+          <input id="cli-ciudad" class="w-full px-3 py-1.5 border rounded-lg" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Lugar</label>
+          <input id="cli-lugar" class="w-full px-3 py-1.5 border rounded-lg" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Calle / Celular</label>
+          <input id="cli-calle" class="w-full px-3 py-1.5 border rounded-lg" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Documento N° C.I</label>
+          <input id="cli-ci" class="w-full px-3 py-1.5 border rounded-lg" />
+        </div>
+        <div class="col-span-2">
+          <label class="block text-xs font-semibold mb-1">Enlace Ubicación Google Maps (Pegar link de WhatsApp)</label>
+          <input id="cli-maps" type="url" class="w-full px-3 py-1.5 border rounded-lg text-xs"
+            placeholder="https://maps.google.com/?q=... o https://maps.app.goo.gl/..." />
+        </div>
+        <div id="bloque-reloj-inicial" class="col-span-2 grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border">
+          <div>
+            <label class="block text-xs font-semibold mb-1">Reloj Inicial (Opcional)</label>
+            <input id="cli-reloj-ini" type="number" class="w-full px-3 py-1.5 border rounded-lg bg-white" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1">Fecha</label>
+            <input id="cli-fecha-ini" type="date" class="w-full px-3 py-1.5 border rounded-lg bg-white" />
+          </div>
+        </div>
+        <div class="col-span-2 flex justify-end gap-2 pt-2">
+          <button type="button" onclick="cerrarModalCliente()" class="px-4 py-2 text-xs font-semibold bg-slate-100 rounded-lg">Cancelar</button>
+          <button type="submit" class="px-4 py-2 text-xs font-bold bg-emerald-600 text-white rounded-lg">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL FOTOS DE RESPALDO -->
+  <div id="modal-fotos" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl max-w-2xl w-full p-5 shadow-xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="font-bold text-base">📷 Fotos de Respaldo — <span id="fotos-titulo-mesa"></span></h3>
+        <button onclick="cerrarModalFotos()" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+      </div>
+      <form onsubmit="subirFotoCliente(event)" class="grid grid-cols-2 md:grid-cols-4 gap-2.5 text-xs bg-slate-50 p-3 rounded-lg border">
+        <div>
+          <label class="block font-bold mb-1">Tipo</label>
+          <select id="foto-tipo" class="w-full px-2 py-1.5 border rounded-lg bg-white">
+            <option value="Reloj">Reloj</option>
+            <option value="Mesa">Mesa</option>
+            <option value="C.I.">Cédula (C.I.)</option>
+            <option value="Local">Local</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-bold mb-1">Fecha</label>
+          <input id="foto-fecha" type="date" required class="w-full px-2 py-1.5 border rounded-lg bg-white" />
+        </div>
+        <div class="col-span-2">
+          <label class="block font-bold mb-1">Seleccionar / Sacar Foto *</label>
+          <input id="foto-archivo" type="file" accept="image/*" capture="environment" required class="w-full text-xs bg-white border rounded-lg p-1" />
+        </div>
+        <div class="col-span-2 md:col-span-3">
+          <input id="foto-obs" placeholder="Nota opcional (ej: Reloj al día de cobro)" class="w-full px-2.5 py-1.5 border rounded-lg bg-white" />
+        </div>
+        <div>
+          <button type="submit" class="w-full py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg">⬆️ Subir Foto</button>
+        </div>
+      </form>
+      <div id="galeria-fotos" class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-72 overflow-y-auto"></div>
+    </div>
+  </div>
+
+  <!-- MODAL MANTENIMIENTO Y REPUESTOS -->
+  <div id="modal-mant" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl max-w-lg w-full p-5 shadow-xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="font-bold text-base">🔧 Mantenimiento y Repuestos — <span id="mant-titulo-mesa"></span></h3>
+        <button onclick="cerrarModalMantenimiento()" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+      </div>
+      <form onsubmit="guardarMantenimiento(event)" class="grid grid-cols-2 gap-2.5 text-xs bg-slate-50 p-3 rounded-lg border">
+        <div>
+          <label class="block font-bold mb-1">Fecha</label>
+          <input id="mant-fecha" type="date" required class="w-full px-2.5 py-1.5 border rounded-lg bg-white" />
+        </div>
+        <div>
+          <label class="block font-bold mb-1">Tipo</label>
+          <select id="mant-tipo" class="w-full px-2.5 py-1.5 border rounded-lg bg-white">
+            <option value="Cambio de paño">Cambio de paño</option>
+            <option value="Entrega de tacos">Entrega de tacos</option>
+            <option value="Tizas / Punteras">Tizas / Punteras</option>
+            <option value="Juego de bolas">Juego de bolas</option>
+            <option value="Reparación de reloj">Reparación de reloj</option>
+            <option value="Nivelación / Bandas">Nivelación / Bandas</option>
+            <option value="Otro">Otro</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-bold mb-1">Costo (Gs.)</label>
+          <input id="mant-costo" type="number" min="0" value="0" class="w-full px-2.5 py-1.5 border rounded-lg bg-white font-bold" />
+        </div>
+        <div>
+          <label class="block font-bold mb-1">Observación</label>
+          <input id="mant-obs" placeholder="Ej: 2 tacos nuevos" class="w-full px-2.5 py-1.5 border rounded-lg bg-white" />
+        </div>
+        <div class="col-span-2 flex justify-end">
+          <button type="submit" class="px-4 py-1.5 bg-violet-600 hover:bg-violet-500 text-white font-bold rounded-lg">+ Guardar</button>
+        </div>
+      </form>
+      <div id="lista-mantenimientos" class="divide-y divide-slate-100 max-h-60 overflow-y-auto"></div>
+    </div>
+  </div>
+
+  <!-- MODAL EDITAR FILA DE LECTURA -->
+  <div id="modal-fila" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl max-w-sm w-full p-5 shadow-xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="font-bold text-base">Editar Fila de Lectura</h3>
+        <button onclick="cerrarModalFila()" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+      </div>
+      <form onsubmit="guardarEdicionFila(event)" class="space-y-3 text-sm">
+        <input type="hidden" id="fila-id" />
+        <div>
+          <label class="block text-xs font-semibold mb-1">Fecha</label>
+          <input id="fila-fecha" type="date" required class="w-full px-3 py-1.5 border rounded-lg" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Reloj N°</label>
+          <input id="fila-reloj" type="number" required class="w-full px-3 py-1.5 border rounded-lg font-bold" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Entrega (Gs.)</label>
+          <input id="fila-entrega" type="number" min="0" required class="w-full px-3 py-1.5 border rounded-lg" />
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="cerrarModalFila()" class="px-4 py-2 text-xs font-semibold bg-slate-100 rounded-lg">Cancelar</button>
+          <button type="submit" class="px-4 py-2 text-xs font-bold bg-emerald-600 text-white rounded-lg">Guardar Cambio</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let clienteActual = null;
+    let lecturasActuales = [];
+    let mantenimientosActuales = [];
+    let fotosActuales = [];
+    let inventarioItems = [];
+    let modoBlancoTemporal = false;
+    let datosCiudades = [];
+    let ciudadSeleccionada = null;
+    let umbralActual = 60;
+
+    let mapaLeaflet = null;
+    let capaMarcadores = null;
+    let lineaRuta = null;
+    let clientesMapaTodos = [];
+
+    const fmt = (n) => Number(n || 0).toLocaleString('es-PY');
+
+    function mostrarModulo(nombre) {
+      ['principal', 'ciudades', 'mapa', 'dashboard', 'inventario', 'cola-wa'].forEach(m => {
+        document.getElementById('modulo-' + m).classList.toggle('hidden', m !== nombre);
+      });
+    }
+
+    /* CONTRATO DE COMODATO / ALQUILER IMPRIMIBLE EN A4 */
+    function imprimirContrato() {
+      if (!clienteActual) return;
+      const hoy = new Date().toLocaleDateString('es-PY', { day: 'numeric', month: 'long', year: 'numeric' });
+      const win = window.open('', '_blank', 'width=850,height=950');
+      win.document.write(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+          <meta charset="UTF-8">
+          <title>Contrato Mesa N° ${clienteActual.mesa_num} — Juegos Patri</title>
+          <style>
+            @page { size: A4; margin: 20mm; }
+            body { font-family: Arial, Helvetica, sans-serif; color: #111; line-height: 1.55; font-size: 11.5pt; }
+            h1 { text-align: center; font-size: 15pt; margin-bottom: 4px; text-transform: uppercase; }
+            h2 { text-align: center; font-size: 11pt; font-weight: normal; margin-top: 0; margin-bottom: 20px; }
+            .box { border: 1.5px solid #111; padding: 12px 16px; margin: 16px 0; background: #fafafa; }
+            p { text-align: justify; margin: 10px 0; }
+            .firmas { display: flex; justify-content: space-between; margin-top: 65px; text-align: center; }
+            .firma-col { width: 42%; border-top: 1px solid #111; padding-top: 6px; font-size: 10pt; }
+          </style>
+        </head>
+        <body>
+          <h1>CONTRATO DE COMODATO Y EXPLOTACIÓN DE MESA DE VILLAR</h1>
+          <h2><strong>JUEGOS PATRI — Fábrica de Villar</strong> • Tel: (0981) 047 851 - (0981) 896 020 • Pdte. Franco, Paraguay</h2>
+
+          <p>En la ciudad de <strong>${clienteActual.ciudad || 'Presidente Franco'}</strong>, a los <strong>${hoy}</strong>, entre <strong>JUEGOS PATRI</strong> (en adelante EL PROPIETARIO) y el/la Sr./Sra. <strong>${clienteActual.senor}</strong>, con Documento de Identidad C.I. N° <strong>${clienteActual.ci || '________________'}</strong>, domiciliado/a en <strong>${clienteActual.lugar || '________________'}</strong>, calle/teléfono <strong>${clienteActual.calle || '________________'}</strong> (en adelante EL RESPONSABLE), convienen celebrar el presente contrato sujeto a las siguientes cláusulas:</p>
+
+          <div class="box">
+            <strong>DATOS DEL EQUIPO ENTREGADO:</strong><br/>
+- <strong>Mesa de Villar N°:</strong> ${clienteActual.mesa_num}<br/>
+- <strong>Tarifa acordada por partida:</strong> ${fmt(clienteActual.tarifa)} Gs. por juego registrado en reloj contador.<br/>
+- <strong>Ubicación del local:</strong> ${clienteActual.ciudad || ''} ${clienteActual.lugar ? '— ' + clienteActual.lugar : ''}
+          </div>
+
+          <p><strong>PRIMERA (Objeto y Responsabilidad):</strong> EL PROPIETARIO entrega en calidad de comodato/explotación la mesa de villar arriba detallada junto con sus accesorios completos (bolas, tacos y contador). La mesa queda bajo la entera responsabilidad civil y material de EL RESPONSABLE, quien se compromete a cuidarla, mantenerla en buen estado y no trasladarla a otro domicilio sin autorización previa y expresa de EL PROPIETARIO.</p>
+
+          <p><strong>SEGUNDA (Liquidación y Cobro):</strong> Las recaudaciones se liquidarán conforme a la lectura del reloj contador de partidas en las visitas periódicas realizadas por EL PROPIETARIO o su representante autorizado, dejándose constancia en la ficha de control correspondiente.</p>
+
+          <p><strong>TERCERA (Restitución):</strong> EL PROPIETARIO podrá retirar la mesa de villar en cualquier momento por baja rotación, falta de pago o incumplimiento de este acuerdo, obligándose EL RESPONSABLE a facilitar su entrega inmediata sin objeción alguna.</p>
+
+          <p>En prueba de conformidad, se firman dos ejemplares de un mismo tenor y a un solo efecto.</p>
+
+          <div class="firmas">
+            <div class="firma-col">
+              <strong>JUEGOS PATRI</strong><br/>Propietario / Representante
+            </div>
+            <div class="firma-col">
+              <strong>${clienteActual.senor}</strong><br/>C.I. N°: ${clienteActual.ci || '________________'}<br/>Firma del Titular Responsable
+            </div>
+          </div>
+          <script>window.onload = () => window.print();<\/script>
+        </body>
+        </html>
+      `);
+      win.document.close();
+    }
+
+    /* FOTOS DE RESPALDO */
+    function abrirModalFotos() {
+      if (!clienteActual) return;
+      document.getElementById('fotos-titulo-mesa').textContent = `Mesa ${clienteActual.mesa_num} (${clienteActual.senor})`;
+      document.getElementById('foto-fecha').value = new Date().toISOString().split('T')[0];
+      document.getElementById('foto-archivo').value = '';
+      document.getElementById('foto-obs').value = '';
+      renderizarGaleriaFotos();
+      document.getElementById('modal-fotos').classList.remove('hidden');
+    }
+    function cerrarModalFotos() { document.getElementById('modal-fotos').classList.add('hidden'); }
+
+    function renderizarGaleriaFotos() {
+      const cont = document.getElementById('galeria-fotos');
+      cont.innerHTML = fotosActuales.length
+        ? fotosActuales.map(f => `
+            <div class="border rounded-lg overflow-hidden bg-slate-50 flex flex-col">
+              <a href="/uploads/${f.archivo}" target="_blank">
+                <img src="/uploads/${f.archivo}" class="w-full h-32 object-cover hover:opacity-90" />
+              </a>
+              <div class="p-2 text-[11px] flex justify-between items-start gap-1">
+                <div>
+                  <span class="font-extrabold text-slate-900">${f.tipo}</span> • <span class="text-slate-500">${f.fecha}</span>
+                  ${f.observacion ? `<div class="text-slate-600 truncate">${f.observacion}</div>` : ''}
+                </div>
+                <button onclick="borrarFoto(${f.id})" class="text-rose-600 font-bold hover:underline">✕</button>
+              </div>
+            </div>
+          `).join('')
+        : '<div class="col-span-full py-6 text-center text-xs text-slate-400">Aún no hay fotos cargadas para esta mesa.</div>';
+    }
+
+    async function subirFotoCliente(e) {
+      e.preventDefault();
+      const fd = new FormData();
+      fd.append('foto', document.getElementById('foto-archivo').files[0]);
+      fd.append('tipo', document.getElementById('foto-tipo').value);
+      fd.append('fecha', document.getElementById('foto-fecha').value);
+      fd.append('observacion', document.getElementById('foto-obs').value);
+      const res = await fetch(`/api/clientes/${clienteActual.id}/fotos`, { method: 'POST', body: fd });
+      if (!res.ok) return alert('Error al subir la foto');
+      await seleccionarCliente(clienteActual.id);
+      renderizarGaleriaFotos();
+      document.getElementById('foto-archivo').value = '';
+      document.getElementById('foto-obs').value = '';
+    }
+
+    async function borrarFoto(fid) {
+      if (!confirm('¿Eliminar esta foto?')) return;
+      await fetch(`/api/fotos/${fid}`, { method: 'DELETE' });
+      await seleccionarCliente(clienteActual.id);
+      renderizarGaleriaFotos();
+    }
+
+    /* INVENTARIO Y VENTAS DIRECTAS */
+    async function abrirVistaInventario() {
+      mostrarModulo('inventario');
+      document.getElementById('inv-fecha').value = new Date().toISOString().split('T')[0];
+      await cargarInventario();
+    }
+
+    async function cargarInventario() {
+      const res = await fetch('/api/inventario');
+      const d = await res.json();
+      inventarioItems = d.items || [];
+      document.getElementById('inv-alquiladas').textContent = d.resumen.alquiladas;
+      document.getElementById('inv-deposito').textContent = d.resumen.en_deposito;
+      document.getElementById('inv-reparacion').textContent = d.resumen.en_reparacion;
+      document.getElementById('inv-vendidas').textContent = d.resumen.vendidas;
+      document.getElementById('inv-pendiente-ventas').textContent = fmt(d.resumen.pendiente_ventas) + ' Gs.';
+      renderizarTablaInventario();
+    }
+
+    function renderizarTablaInventario() {
+      const filtro = document.getElementById('inv-filtro-estado').value;
+      const lista = inventarioItems.filter(i => !filtro || i.estado === filtro);
+      const cont = document.getElementById('lista-inventario');
+      cont.innerHTML = lista.length
+        ? lista.map(i => {
+            const colorEstado = i.estado === 'Vendida' ? 'bg-purple-100 text-purple-800'
+              : i.estado === 'En Reparación' ? 'bg-amber-100 text-amber-800' : 'bg-indigo-100 text-indigo-800';
+            const saldoVenta = i.estado === 'Vendida' ? Math.max(0, i.precio - i.pagado) : 0;
+            return `
+              <div class="p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs hover:bg-slate-50">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-extrabold bg-slate-900 text-white px-2 py-0.5 rounded">Mesa ${i.mesa_num}</span>
+                    <span class="font-bold px-2 py-0.5 rounded ${colorEstado}">${i.estado}</span>
+                    ${i.modelo ? `<span class="font-semibold text-slate-700">${i.modelo}</span>` : ''}
+                    <span class="text-slate-400">${i.fecha || ''}</span>
+                  </div>
+                  <div class="text-slate-600 mt-1">
+                    ${i.comprador ? `Comprador: <strong>${i.comprador}</strong> ${i.telefono ? '(' + i.telefono + ')' : ''} • ` : ''}
+                    ${i.observacion || ''}
+                  </div>
+                </div>
+                <div class="flex items-center gap-3 shrink-0">
+                  ${i.estado === 'Vendida' ? `
+                    <div class="text-right">
+                      <div>Precio: <strong>${fmt(i.precio)} Gs.</strong> | Pagado: <strong class="text-emerald-700">${fmt(i.pagado)} Gs.</strong></div>
+                      ${saldoVenta > 0 ? `<div class="text-rose-700 font-black">Saldo: ${fmt(saldoVenta)} Gs.</div>` : '<div class="text-emerald-700 font-bold">Pagado total ✓</div>'}
+                    </div>
+                  ` : ''}
+                  <button onclick="borrarInventario(${i.id})" class="text-rose-600 hover:bg-rose-50 px-2 py-1 rounded font-bold border border-rose-200">Borrar</button>
+                </div>
+              </div>
+            `;
+          }).join('')
+        : '<div class="p-6 text-center text-xs text-slate-400">No hay mesas registradas en este estado.</div>';
+    }
+
+    async function guardarInventario(e) {
+      e.preventDefault();
+      await fetch('/api/inventario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mesa_num: document.getElementById('inv-mesa').value,
+          estado: document.getElementById('inv-estado').value,
+          modelo: document.getElementById('inv-modelo').value,
+          fecha: document.getElementById('inv-fecha').value,
+          comprador: document.getElementById('inv-comprador').value,
+          telefono: document.getElementById('inv-tel').value,
+          precio: document.getElementById('inv-precio').value,
+          pagado: document.getElementById('inv-pagado').value,
+          observacion: document.getElementById('inv-obs').value
+        })
+      });
+      ['inv-mesa', 'inv-modelo', 'inv-comprador', 'inv-tel', 'inv-obs'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('inv-precio').value = '0';
+      document.getElementById('inv-pagado').value = '0';
+      await cargarInventario();
+    }
+
+    async function borrarInventario(iid) {
+      if (!confirm('¿Borrar este registro del inventario?')) return;
+      await fetch(`/api/inventario/${iid}`, { method: 'DELETE' });
+      await cargarInventario();
+    }
+
+    /* COLA RÁPIDA DE WHATSAPP */
+    async function abrirVistaColaWa() {
+      mostrarModulo('cola-wa');
+      const res = await fetch('/api/cola-whatsapp');
+      const d = await res.json();
+
+      document.getElementById('wa-cnt-saldo').textContent = d.con_saldo.length;
+      document.getElementById('wa-cnt-gps').textContent = d.sin_gps.length;
+
+      document.getElementById('cola-wa-saldo').innerHTML = d.con_saldo.length
+        ? d.con_saldo.map(c => {
+            const msg = `Hola ${c.senor}, ¿cómo estás? Te escribimos de *Juegos Patri* (Mesa N° ${c.mesa_num}) para recordarte que figura un saldo pendiente de *${fmt(c.saldo_actual)} Gs.* Quedamos atentos para coordinar el pago. ¡Muchas gracias!`;
+            const tel = extraerTelefonoPy(c.calle);
+            const url = tel ? `https://wa.me/${tel}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+            return `
+              <div class="p-3 flex items-center justify-between gap-2 text-xs hover:bg-slate-50">
+                <div>
+                  <span class="font-extrabold bg-slate-900 text-white px-1.5 py-0.5 rounded">Mesa ${c.mesa_num}</span>
+                  <strong class="ml-1 text-slate-900">${c.senor}</strong>
+                  <div class="text-[11px] text-slate-500 mt-0.5">${c.ciudad || ''} • Saldo: <strong class="text-amber-700">${fmt(c.saldo_actual)} Gs.</strong></div>
+                </div>
+                <a href="${url}" target="_blank" onclick="marcarEnviado(this)"
+                   class="shrink-0 bg-green-600 hover:bg-green-500 text-white font-bold px-3 py-1.5 rounded-lg">💬 Enviar</a>
+              </div>
+            `;
+          }).join('')
+        : '<div class="p-4 text-xs text-slate-400">No hay clientes con saldo pendiente.</div>';
+
+      document.getElementById('cola-wa-gps').innerHTML = d.sin_gps.length
+        ? d.sin_gps.map(c => {
+            const msg = `Hola ${c.senor}, ¿cómo estás? Te escribimos de *Juegos Patri* (Mesa N° ${c.mesa_num}) para actualizar el mapa de nuestras mesas. ¿Nos podrías pasar por favor la ubicación actual de tu local por Google Maps? ¡Muchas gracias!`;
+            const tel = extraerTelefonoPy(c.calle);
+            const url = tel ? `https://wa.me/${tel}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+            return `
+              <div class="p-3 flex items-center justify-between gap-2 text-xs hover:bg-slate-50">
+                <div>
+                  <span class="font-extrabold bg-slate-900 text-white px-1.5 py-0.5 rounded">Mesa ${c.mesa_num}</span>
+                  <strong class="ml-1 text-slate-900">${c.senor}</strong>
+                  <div class="text-[11px] text-slate-500 mt-0.5">${c.ciudad || ''} ${c.lugar ? '• ' + c.lugar : ''}</div>
+                </div>
+                <a href="${url}" target="_blank" onclick="marcarEnviado(this)"
+                   class="shrink-0 bg-sky-600 hover:bg-sky-500 text-white font-bold px-3 py-1.5 rounded-lg">📍 Pedir GPS</a>
+              </div>
+            `;
+          }).join('')
+        : '<div class="p-4 text-xs text-slate-400">¡Todos tus clientes ya tienen ubicación GPS cargada!</div>';
+    }
+
+    function marcarEnviado(el) {
+      el.textContent = 'Enviado ✓';
+      el.classList.remove('bg-green-600', 'bg-sky-600');
+      el.classList.add('bg-slate-400');
+    }
+
+    /* DASHBOARD */
+    function abrirVistaCiudades() { mostrarModulo('ciudades'); cargarVistaCiudades(); }
+    async function abrirVistaDashboard() {
+      mostrarModulo('dashboard');
+      document.getElementById('gasto-fecha').value = new Date().toISOString().split('T')[0];
+      await cargarDashboard();
+    }
+
+    async function cargarDashboard() {
+      const res = await fetch('/api/dashboard');
+      const d = await res.json();
+      document.getElementById('dash-hoy').textContent = fmt(d.recaudacion.hoy) + ' Gs.';
+      document.getElementById('dash-semana').textContent = fmt(d.recaudacion.semana) + ' Gs.';
+      document.getElementById('dash-mes').textContent = fmt(d.recaudacion.mes) + ' Gs.';
+      document.getElementById('dash-gastos').textContent = fmt(d.gastos.total_mes) + ' Gs.';
+      document.getElementById('dash-neto').textContent = fmt(d.ganancia_neta_mes) + ' Gs.';
+
+      document.getElementById('dash-por-ciudad').innerHTML = d.recaudacion.por_ciudad_mes.length
+        ? d.recaudacion.por_ciudad_mes.map(c => `<div class="px-4 py-2.5 flex justify-between items-center text-xs"><span class="font-bold text-slate-800">${c.ciudad}</span><span class="font-black text-emerald-700">${fmt(c.total)} Gs.</span></div>`).join('')
+        : '<div class="p-4 text-xs text-slate-400">Sin cobros registrados en este mes.</div>';
+
+      document.getElementById('dash-lista-gastos').innerHTML = d.gastos.lista.length
+        ? d.gastos.lista.map(g => `<div class="px-4 py-2.5 flex justify-between items-center text-xs"><div><span class="font-bold text-slate-900">${g.categoria}</span> <span class="text-slate-500">• ${g.fecha} ${g.ciudad ? '• ' + g.ciudad : ''}</span>${g.descripcion ? `<div class="text-[11px] text-slate-500">${g.descripcion}</div>` : ''}</div><div class="flex items-center gap-2 shrink-0"><strong class="text-rose-700">${fmt(g.monto)} Gs.</strong><button onclick="borrarGasto(${g.id})" class="text-slate-400 hover:text-rose-600 font-bold">✕</button></div></div>`).join('')
+        : '<div class="p-4 text-xs text-slate-400">Aún no cargaste gastos de gira.</div>';
+
+      document.getElementById('dash-top-mesas').innerHTML = d.top_mesas.length
+        ? d.top_mesas.map((m, idx) => `<div onclick="irAClienteDesdeOtroModulo(${m.id})" class="px-4 py-2.5 flex justify-between items-center text-xs hover:bg-slate-50 cursor-pointer"><div><span class="font-black text-emerald-700 mr-1">#${idx + 1}</span><span class="font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded text-[11px]">Mesa ${m.mesa_num}</span><strong class="ml-1 text-slate-900">${m.senor}</strong> <span class="text-slate-500">(${m.ciudad || 'Sin ciudad'})</span></div><span class="font-black text-emerald-700">${fmt(m.juegos_3m)} jug.</span></div>`).join('')
+        : '<div class="p-4 text-xs text-slate-400">Sin datos suficientes en los últimos 3 meses.</div>';
+
+      document.getElementById('dash-retirar').innerHTML = d.para_retirar.length
+        ? d.para_retirar.map(m => `<div onclick="irAClienteDesdeOtroModulo(${m.id})" class="px-4 py-2.5 flex justify-between items-center text-xs hover:bg-slate-50 cursor-pointer"><div><span class="font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded text-[11px]">Mesa ${m.mesa_num}</span><strong class="ml-1 text-slate-900">${m.senor}</strong> <span class="text-slate-500">(${m.ciudad || 'Sin ciudad'})</span></div><div class="text-right shrink-0"><span class="font-bold text-rose-700">${fmt(m.juegos_3m)} jug.</span>${m.saldo_actual > 0 ? `<span class="ml-1.5 bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold">${fmt(m.saldo_actual)} Gs.</span>` : ''}</div></div>`).join('')
+        : '<div class="p-4 text-xs text-slate-400">No hay mesas críticas candidatas a retiro.</div>';
+    }
+
+    async function irAClienteDesdeOtroModulo(id) {
+      mostrarModulo('principal');
+      await seleccionarCliente(id);
+    }
+
+    async function guardarGasto(e) {
+      e.preventDefault();
+      await fetch('/api/gastos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fecha: document.getElementById('gasto-fecha').value,
+          categoria: document.getElementById('gasto-cat').value,
+          ciudad: document.getElementById('gasto-ciudad').value,
+          monto: document.getElementById('gasto-monto').value,
+          descripcion: document.getElementById('gasto-desc').value
+        })
+      });
+      document.getElementById('gasto-monto').value = '';
+      document.getElementById('gasto-desc').value = '';
+      await cargarDashboard();
+    }
+
+    async function borrarGasto(gid) {
+      if (!confirm('¿Borrar este gasto?')) return;
+      await fetch(`/api/gastos/${gid}`, { method: 'DELETE' });
+      await cargarDashboard();
+    }
+
+    /* WHATSAPP 1 CLIC */
+    function extraerTelefonoPy(texto) {
+      const nums = (texto || '').replace(/\D/g, '');
+      if (!nums) return '';
+      if (nums.startsWith('595')) return nums;
+      if (nums.startsWith('09') && nums.length >= 10) return '595' + nums.slice(1, 10);
+      if (nums.startsWith('9') && nums.length >= 9) return '595' + nums.slice(0, 9);
+      return '';
+    }
+
+    function enviarWhatsappComprobante() {
+      if (!clienteActual) return;
+      const ultima = lecturasActuales[lecturasActuales.length - 1];
+      const anterior = lecturasActuales.length > 1 ? lecturasActuales[lecturasActuales.length - 2] : null;
+      let msg = `Hola ${clienteActual.senor}, le enviamos el resumen de *Juegos Patri* (Mesa N° ${clienteActual.mesa_num}):\n`;
+      if (ultima) {
+        msg += `• Fecha: ${ultima.fecha}\n`;
+        if (anterior) msg += `• Reloj: ${anterior.reloj} → ${ultima.reloj} (${ultima.cant_jug} juegos)\n`;
+        else msg += `• Reloj actual: ${ultima.reloj}\n`;
+        msg += `• Total: ${fmt(ultima.total_gs)} Gs.\n• Entrega: ${fmt(ultima.entrega)} Gs.\n• Saldo pendiente: ${fmt(ultima.saldo_resultante)} Gs.\n`;
+      }
+      msg += `¡Muchas gracias!`;
+      const tel = extraerTelefonoPy(clienteActual.calle);
+      window.open(tel ? `https://wa.me/${tel}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    }
+
+    function enviarWhatsappPedirGps() {
+      if (!clienteActual) return;
+      const msg = `Hola ${clienteActual.senor}, ¿cómo estás? Te escribimos de *Juegos Patri* (Mesa N° ${clienteActual.mesa_num}) para actualizar el registro de nuestras mesas. ¿Nos podrías pasar por favor la ubicación actual de tu local por Google Maps? ¡Muchas gracias!`;
+      const tel = extraerTelefonoPy(clienteActual.calle);
+      window.open(tel ? `https://wa.me/${tel}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    }
+
+    /* MANTENIMIENTO */
+    function abrirModalMantenimiento() {
+      if (!clienteActual) return;
+      document.getElementById('mant-titulo-mesa').textContent = `Mesa ${clienteActual.mesa_num} (${clienteActual.senor})`;
+      document.getElementById('mant-fecha').value = new Date().toISOString().split('T')[0];
+      document.getElementById('mant-costo').value = '0';
+      document.getElementById('mant-obs').value = '';
+      renderizarListaMantenimientos();
+      document.getElementById('modal-mant').classList.remove('hidden');
+    }
+    function cerrarModalMantenimiento() { document.getElementById('modal-mant').classList.add('hidden'); }
+
+    function renderizarListaMantenimientos() {
+      const cont = document.getElementById('lista-mantenimientos');
+      cont.innerHTML = mantenimientosActuales.length
+        ? mantenimientosActuales.map(m => `<div class="py-2.5 flex justify-between items-center text-xs"><div><span class="font-bold text-slate-900">${m.tipo}</span> <span class="text-slate-500">• ${m.fecha}</span>${m.observacion ? `<div class="text-[11px] text-slate-500">${m.observacion}</div>` : ''}</div><div class="flex items-center gap-2 shrink-0"><strong class="text-violet-700">${fmt(m.costo)} Gs.</strong><button onclick="borrarMantenimiento(${m.id})" class="text-slate-400 hover:text-rose-600 font-bold">✕</button></div></div>`).join('')
+        : '<div class="py-4 text-center text-xs text-slate-400">Sin registros de mantenimiento en esta mesa.</div>';
+    }
+
+    async function guardarMantenimiento(e) {
+      e.preventDefault();
+      await fetch(`/api/clientes/${clienteActual.id}/mantenimientos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fecha: document.getElementById('mant-fecha').value,
+          tipo: document.getElementById('mant-tipo').value,
+          costo: document.getElementById('mant-costo').value,
+          observacion: document.getElementById('mant-obs').value
+        })
+      });
+      await seleccionarCliente(clienteActual.id);
+      renderizarListaMantenimientos();
+    }
+
+    async function borrarMantenimiento(mid) {
+      if (!confirm('¿Borrar este registro?')) return;
+      await fetch(`/api/mantenimientos/${mid}`, { method: 'DELETE' });
+      await seleccionarCliente(clienteActual.id);
+      renderizarListaMantenimientos();
+    }
+
+    /* MAPA GPS Y RUTAS */
+    async function abrirVistaMapa() {
+      mostrarModulo('mapa');
+      if (!mapaLeaflet) {
+        mapaLeaflet = L.map('mapa-leaflet').setView([-25.5163, -54.6111], 7);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(mapaLeaflet);
+        capaMarcadores = L.layerGroup().addTo(mapaLeaflet);
+      }
+      setTimeout(() => mapaLeaflet.invalidateSize(), 150);
+      await cargarDatosMapa();
+    }
+
+    async function cargarDatosMapa() {
+      const res = await fetch('/api/mapa-clientes');
+      const data = await res.json();
+      clientesMapaTodos = data.clientes || [];
+      const alertaSync = document.getElementById('alerta-sync-gps');
+      if (data.pendientes_sync > 0) {
+        document.getElementById('lbl-pendientes-sync').textContent = data.pendientes_sync;
+        alertaSync.classList.remove('hidden');
+      } else alertaSync.classList.add('hidden');
+
+      const selCiudad = document.getElementById('mapa-filtro-ciudad');
+      const valActual = selCiudad.value;
+      selCiudad.innerHTML = '<option value="">Todas las ciudades</option>' +
+        (data.ciudades || []).map(c => `<option value="${c}" ${c === valActual ? 'selected' : ''}>${c}</option>`).join('');
+      renderizarMapaYRuta();
+    }
+
+    async function sincronizarGpsExistentes() {
+      const btn = document.getElementById('btn-sync-gps');
+      btn.disabled = true;
+      btn.textContent = 'Sincronizando...';
+      try {
+        const res = await fetch('/api/sincronizar-gps', { method: 'POST' });
+        const data = await res.json();
+        alert(`Listo: ${data.actualizados} ubicaciones agregadas al mapa.`);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🔄 Sincronizar Links al Mapa';
+        await cargarDatosMapa();
+      }
+    }
+
+    function distanciaKm(lat1, lng1, lat2, lng2) {
+      const R = 6371, dLat = (lat2 - lat1) * Math.PI / 180, dLng = (lng2 - lng1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    function ordenarRutaCercana(lista, idInicio) {
+      if (lista.length <= 1) return [...lista];
+      const pendientes = [...lista];
+      let idxIni = idInicio ? pendientes.findIndex(x => String(x.id) === String(idInicio)) : 0;
+      if (idxIni < 0) idxIni = 0;
+      const ruta = [pendientes.splice(idxIni, 1)[0]];
+      while (pendientes.length > 0) {
+        const ultimo = ruta[ruta.length - 1];
+        let mejorIdx = 0, mejorDist = Infinity;
+        for (let i = 0; i < pendientes.length; i++) {
+          const d = distanciaKm(ultimo.lat, ultimo.lng, pendientes[i].lat, pendientes[i].lng);
+          if (d < mejorDist) { mejorDist = d; mejorIdx = i; }
+        }
+        ruta.push(pendientes.splice(mejorIdx, 1)[0]);
+      }
+      return ruta;
+    }
+
+    function renderizarMapaYRuta() {
+      if (!mapaLeaflet) return;
+      const ciudad = document.getElementById('mapa-filtro-ciudad').value;
+      const estado = document.getElementById('mapa-filtro-estado').value;
+      let filtrados = clientesMapaTodos.filter(c => {
+        if (ciudad && (c.ciudad || '').trim() !== ciudad) return false;
+        if (estado === 'saldo' && !(c.saldo_actual > 0)) return false;
+        if (estado === '2m' && !c.sin_visita_2m) return false;
+        return true;
+      });
+
+      const selInicio = document.getElementById('mapa-punto-inicio');
+      const inicioActual = selInicio.value;
+      selInicio.innerHTML = '<option value="">Automático (primer cliente de la zona)</option>' +
+        filtrados.map(c => `<option value="${c.id}" ${String(c.id) === inicioActual ? 'selected' : ''}>Mesa ${c.mesa_num} — ${c.senor}</option>`).join('');
+
+      const rutaOrdenada = ordenarRutaCercana(filtrados, selInicio.value);
+      capaMarcadores.clearLayers();
+      if (lineaRuta) { mapaLeaflet.removeLayer(lineaRuta); lineaRuta = null; }
+      document.getElementById('lbl-total-paradas').textContent = `${rutaOrdenada.length} paradas`;
+
+      const coordsLinea = [];
+      rutaOrdenada.forEach((c, idx) => {
+        const num = idx + 1;
+        let color = c.sin_visita_2m ? '#e11d48' : (c.saldo_actual > 0 ? '#d97706' : '#059669');
+        const icono = L.divIcon({ className: '', html: `<div class="pin-ruta" style="background:${color};">${num}</div>`, iconSize: [28, 28], iconAnchor: [14, 14] });
+        const saldoTxt = c.saldo_actual > 0 ? `<strong style="color:#b45309;">${fmt(c.saldo_actual)} Gs.</strong>` : '<span style="color:#059669;">Al día</span>';
+        const popupHtml = `<div style="font-family:Inter,sans-serif;min-width:190px;font-size:12px;"><div style="font-weight:800;">#${num} • Mesa ${c.mesa_num}</div><div style="font-weight:700;">${c.senor}</div><div style="color:#64748b;font-size:11px;margin-bottom:6px;">${c.ciudad || ''} ${c.lugar ? '• ' + c.lugar : ''}</div><div style="margin-bottom:8px;">Saldo: ${saldoTxt}</div><div style="display:flex;gap:6px;"><button onclick="irAClienteDesdeOtroModulo(${c.id})" style="flex:1;background:#0f172a;color:#fff;border:none;padding:5px 8px;border-radius:6px;font-weight:700;cursor:pointer;font-size:11px;">Ver Ficha</button><a href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}&travelmode=driving" target="_blank" style="flex:1;text-align:center;background:#0284c7;color:#fff;text-decoration:none;padding:5px 8px;border-radius:6px;font-weight:700;font-size:11px;">📍 Ir GPS</a></div></div>`;
+        L.marker([c.lat, c.lng], { icon: icono }).bindPopup(popupHtml).addTo(capaMarcadores);
+        coordsLinea.push([c.lat, c.lng]);
+      });
+
+      if (coordsLinea.length >= 2) lineaRuta = L.polyline(coordsLinea, { color: '#0284c7', weight: 3.5, opacity: 0.75, dashArray: '6, 8' }).addTo(mapaLeaflet);
+      if (coordsLinea.length > 0) mapaLeaflet.fitBounds(L.latLngBounds(coordsLinea), { padding: [35, 35], maxZoom: 15 });
+
+      const contTramos = document.getElementById('contenedor-tramos-maps');
+      let htmlTramos = '';
+      for (let i = 0; i < rutaOrdenada.length; i += 9) {
+        const bloque = rutaOrdenada.slice(i, i + 9);
+        const destino = bloque[bloque.length - 1];
+        const intermedios = bloque.slice(0, -1).map(p => `${p.lat},${p.lng}`).join('|');
+        let urlMaps = `https://www.google.com/maps/dir/?api=1&destination=${destino.lat},${destino.lng}&travelmode=driving`;
+        if (intermedios) urlMaps += `&waypoints=${encodeURIComponent(intermedios)}`;
+        const desde = i + 1, hasta = i + bloque.length;
+        const etiqueta = rutaOrdenada.length <= 9 ? `🚗 Abrir Ruta en Google Maps (${desde} a ${hasta})` : `🚗 Tramo ${Math.floor(i / 9) + 1}: Paradas ${desde} a ${hasta}`;
+        htmlTramos += `<a href="${urlMaps}" target="_blank" rel="noopener noreferrer" class="block w-full text-center bg-sky-600 hover:bg-sky-500 text-white text-xs font-extrabold py-2 px-3 rounded-lg shadow-sm">${etiqueta}</a>`;
+      }
+      contTramos.innerHTML = htmlTramos;
+
+      document.getElementById('lista-paradas-ruta').innerHTML = rutaOrdenada.length
+        ? rutaOrdenada.map((c, idx) => `<div onclick="mapaLeaflet.setView([${c.lat},${c.lng}],16,{animate:true})" class="p-3 hover:bg-slate-50 cursor-pointer flex items-start justify-between gap-2"><div class="flex items-start gap-2.5"><span class="w-6 h-6 rounded-full bg-slate-900 text-white text-xs font-black flex items-center justify-center shrink-0 mt-0.5">${idx + 1}</span><div><div class="text-xs font-extrabold text-slate-900">Mesa ${c.mesa_num} — ${c.senor}</div><div class="text-[11px] text-slate-500">${c.ciudad || ''} ${c.lugar ? '• ' + c.lugar : ''}</div><div class="mt-1 flex items-center gap-2"><button onclick="event.stopPropagation(); irAClienteDesdeOtroModulo(${c.id})" class="text-[11px] font-bold text-indigo-700 hover:underline">Abrir ficha</button><a href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}&travelmode=driving" target="_blank" onclick="event.stopPropagation()" class="text-[11px] font-bold text-sky-700 hover:underline">📍 Ir</a></div></div></div><span class="text-[11px] font-bold px-2 py-0.5 rounded ${c.saldo_actual > 0 ? 'text-amber-700 bg-amber-100' : 'text-emerald-700 bg-emerald-100'}">${c.saldo_actual > 0 ? fmt(c.saldo_actual) + ' Gs.' : 'Al día'}</span></div>`).join('')
+        : '<div class="p-4 text-xs text-slate-400">No hay clientes con coordenadas GPS para este filtro.</div>';
+    }
+
+    /* CIUDADES */
+    async function cargarVistaCiudades() {
+      umbralActual = Number(document.getElementById('sel-umbral-juegos').value || 60);
+      const res = await fetch(`/api/ciudades-resumen?umbral_juegos=${umbralActual}`);
+      const data = await res.json();
+      datosCiudades = data.ciudades || [];
+      if (!ciudadSeleccionada && datosCiudades.length > 0) ciudadSeleccionada = datosCiudades[0].ciudad;
+      renderizarMenuCiudades();
+      renderizarDetalleCiudad();
+    }
+
+    function renderizarMenuCiudades() {
+      document.getElementById('lista-ciudades-menu').innerHTML = datosCiudades.map(g => {
+        const activa = g.ciudad === ciudadSeleccionada;
+        return `<div onclick="ciudadSeleccionada='${g.ciudad.replace(/'/g, "\\'")}';renderizarMenuCiudades();renderizarDetalleCiudad();" class="p-3.5 cursor-pointer transition ${activa ? 'bg-indigo-50 border-l-4 border-indigo-600' : 'hover:bg-slate-50'}"><div class="font-extrabold text-sm text-slate-900">${g.ciudad}</div><div class="flex flex-wrap items-center gap-1.5 mt-1.5 text-[11px]"><span class="bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded">${g.pendientes.length} pendientes</span><span class="bg-rose-100 text-rose-800 font-bold px-2 py-0.5 rounded">${g.sin_visita_2m.length} +2m</span><span class="bg-orange-100 text-orange-800 font-bold px-2 py-0.5 rounded">${g.baja_rotacion_3m.length} &lt;${umbralActual}/3m</span></div></div>`;
+      }).join('');
+    }
+
+    function filaClienteCiudad(c) {
+      const fechaTexto = c.ultima_fecha ? `Última visita: <strong>${c.ultima_fecha}</strong>` : 'Sin visitas registradas';
+      const saldoBadge = c.saldo_actual > 0 ? `<span class="text-xs font-black text-amber-700 bg-amber-100 px-2.5 py-1 rounded-md">${fmt(c.saldo_actual)} Gs.</span>` : `<span class="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-md">0 Gs.</span>`;
+      const alerta2m = c.sin_visita_2m ? `<span class="text-[11px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded">+2 meses</span>` : '';
+      const alerta3m = c.baja_rotacion_3m ? `<span class="text-[11px] font-bold text-orange-800 bg-orange-100 px-2 py-0.5 rounded">${fmt(c.juegos_3m)} jug/3m</span>` : `<span class="text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">${fmt(c.juegos_3m)} jug/3m</span>`;
+      const btnMapsCiudad = c.maps_url ? `<a href="${c.maps_url}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="text-[11px] font-bold text-sky-700 bg-sky-100 hover:bg-sky-200 px-2 py-0.5 rounded">📍 Mapa</a>` : '';
+      return `<div onclick="irAClienteDesdeOtroModulo(${c.id})" class="p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50 cursor-pointer transition"><div><div class="flex flex-wrap items-center gap-2"><span class="text-xs font-extrabold bg-slate-900 text-white px-2 py-0.5 rounded">Mesa ${c.mesa_num}</span><span class="font-bold text-sm text-slate-900">${c.senor}</span>${alerta2m}${alerta3m}${btnMapsCiudad}</div><div class="text-xs text-slate-500 mt-1">${c.lugar || 'Sin lugar'} • Reloj: <strong>${fmt(c.ultimo_reloj)}</strong> • ${fechaTexto}</div></div><div class="text-right shrink-0">${saldoBadge}</div></div>`;
+    }
+
+    function renderizarDetalleCiudad() {
+      const cont = document.getElementById('detalle-ciudad-contenido');
+      const g = datosCiudades.find(x => x.ciudad === ciudadSeleccionada);
+      if (!g) { cont.innerHTML = '<div class="bg-white rounded-xl border p-6 text-slate-500 text-sm">Aún no hay clientes cargados.</div>'; return; }
+      cont.innerHTML = `
+        <div class="bg-white rounded-xl border p-5 shadow-sm flex flex-wrap items-center justify-between gap-4">
+          <div><h2 class="text-2xl font-black text-slate-900">${g.ciudad}</h2><p class="text-xs text-slate-500 mt-0.5">Total mesas: <strong>${g.total_mesas}</strong></p></div>
+          <div class="bg-amber-50 border border-amber-200 px-4 py-2 rounded-xl text-right"><span class="text-[11px] font-bold uppercase text-amber-700 block">Pendiente en ${g.ciudad}</span><strong class="text-xl font-black text-amber-800">${fmt(g.total_a_cobrar)} Gs.</strong></div>
+        </div>
+        <div class="bg-white rounded-xl border-2 border-amber-300 shadow-sm overflow-hidden"><div class="px-4 py-3 bg-amber-50 border-b border-amber-200 flex justify-between"><h3 class="text-sm font-extrabold text-amber-900">💰 Pagos Pendientes (${g.pendientes.length})</h3><span class="text-xs font-bold text-amber-800">${fmt(g.total_a_cobrar)} Gs.</span></div><div class="divide-y divide-slate-100">${g.pendientes.length ? g.pendientes.map(filaClienteCiudad).join('') : '<div class="p-4 text-xs text-slate-400">Sin pagos pendientes.</div>'}</div></div>
+        <div class="bg-white rounded-xl border-2 border-rose-300 shadow-sm overflow-hidden"><div class="px-4 py-3 bg-rose-50 border-b border-rose-200"><h3 class="text-sm font-extrabold text-rose-900">⏰ Sin Visita hace +2 Meses (${g.sin_visita_2m.length})</h3></div><div class="divide-y divide-slate-100">${g.sin_visita_2m.length ? g.sin_visita_2m.map(filaClienteCiudad).join('') : '<div class="p-4 text-xs text-slate-400">Todas visitadas en los últimos 2 meses.</div>'}</div></div>
+        <div class="bg-white rounded-xl border-2 border-orange-300 shadow-sm overflow-hidden"><div class="px-4 py-3 bg-orange-50 border-b border-orange-200"><h3 class="text-sm font-extrabold text-orange-900">📉 Menos de ${umbralActual} Juegos en 3 Meses (${g.baja_rotacion_3m.length})</h3></div><div class="divide-y divide-slate-100">${g.baja_rotacion_3m.length ? g.baja_rotacion_3m.map(filaClienteCiudad).join('') : '<div class="p-4 text-xs text-slate-400">Sin mesas de baja rotación.</div>'}</div></div>
+        <div class="bg-white rounded-xl border shadow-sm overflow-hidden"><div class="px-4 py-3 bg-slate-50 border-b"><h3 class="text-sm font-extrabold text-slate-700">✅ Al Día y Buena Rotación (${g.al_dia.length})</h3></div><div class="divide-y divide-slate-100">${g.al_dia.length ? g.al_dia.map(filaClienteCiudad).join('') : '<div class="p-4 text-xs text-slate-400">Sin registros.</div>'}</div></div>
+      `;
+    }
+
+    /* CLIENTES Y FICHA */
+    async function cargarClientes() {
+      const q = document.getElementById('buscador').value;
+      const ciudad = document.getElementById('filtro-ciudad').value;
+      const soloDeuda = document.getElementById('filtro-deuda').checked ? '1' : '0';
+      const sinGps = document.getElementById('filtro-sin-gps').checked ? '1' : '0';
+
+      const res = await fetch(`/api/clientes?q=${encodeURIComponent(q)}&ciudad=${encodeURIComponent(ciudad)}&solo_deuda=${soloDeuda}&sin_gps=${sinGps}`);
+      const data = await res.json();
+
+      document.getElementById('kpi-mesas').textContent = data.resumen.total_mesas;
+      document.getElementById('kpi-deudores').textContent = data.resumen.con_saldo;
+      document.getElementById('kpi-cartera').textContent = fmt(data.resumen.total_a_cobrar) + ' Gs.';
+      document.getElementById('kpi-con-gps').textContent = data.resumen.con_gps ?? 0;
+      document.getElementById('kpi-sin-gps').textContent = data.resumen.sin_gps ?? 0;
+
+      const selCiudad = document.getElementById('filtro-ciudad');
+      const valActual = selCiudad.value;
+      selCiudad.innerHTML = '<option value="">Todas las ciudades</option>' +
+        data.ciudades.map(c => `<option value="${c}" ${c === valActual ? 'selected' : ''}>${c}</option>`).join('');
+
+      document.getElementById('lista-clientes').innerHTML = data.clientes.map(c => {
+        const activo = clienteActual && clienteActual.id === c.id;
+        const tieneSaldo = c.saldo_actual > 0;
+        const iconoGps = c.maps_url ? '<span title="Tiene GPS" class="ml-1 text-[11px]">📍</span>' : '';
+        return `
+          <div onclick="seleccionarCliente(${c.id})" class="p-3 cursor-pointer transition ${activo ? 'bg-rose-50 border-l-4 border-rose-600' : 'hover:bg-slate-50'}">
+            <div class="flex justify-between items-start">
+              <div><span class="text-xs font-extrabold text-slate-900 bg-slate-200 px-1.5 py-0.5 rounded">Mesa ${c.mesa_num}</span><span class="font-bold text-sm text-slate-900 ml-1">${c.senor}</span>${iconoGps}</div>
+              <span class="text-xs font-extrabold ${tieneSaldo ? 'text-amber-600' : 'text-emerald-600'}">${tieneSaldo ? fmt(c.saldo_actual) + ' Gs.' : 'Al día'}</span>
+            </div>
+            <div class="flex justify-between text-[11px] text-slate-500 mt-1">
+              <span>${c.ciudad || ''} ${c.lugar ? '• ' + c.lugar : ''}</span>
+              <span>Reloj: <strong>${fmt(c.ultimo_reloj)}</strong></span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    let timerBusqueda;
+    function filtrarClientes() { clearTimeout(timerBusqueda); timerBusqueda = setTimeout(cargarClientes, 150); }
+
+    function poblarSelectorFilas() {
+      const sel = document.getElementById('sel-editar-fila');
+      if (sel) sel.innerHTML = lecturasActuales.map((l, idx) => `<option value="${l.id}">Fila ${idx + 1} (${l.fecha} • Reloj ${l.reloj})</option>`).join('');
+    }
+
+    async function seleccionarCliente(id) {
+      modoBlancoTemporal = false;
+      const res = await fetch(`/api/clientes/${id}`);
+      const data = await res.json();
+      clienteActual = data.cliente;
+      lecturasActuales = data.lecturas;
+      mantenimientosActuales = data.mantenimientos || [];
+      fotosActuales = data.fotos || [];
+
+      document.getElementById('vista-vacia').classList.add('hidden');
+      document.getElementById('vista-cliente').classList.remove('hidden');
+      document.getElementById('badge-tarifa').textContent = `${fmt(clienteActual.tarifa)} Gs./jug`;
+      document.getElementById('badge-cant-mant').textContent = mantenimientosActuales.length;
+      document.getElementById('badge-cant-fotos').textContent = fotosActuales.length;
+
+      const btnMaps = document.getElementById('btn-abrir-maps');
+      const btnPedirGps = document.getElementById('btn-wa-pedir-gps');
+      if (clienteActual.maps_url) {
+        btnMaps.href = clienteActual.maps_url;
+        btnMaps.classList.remove('hidden');
+        btnPedirGps.classList.add('hidden');
+      } else {
+        btnMaps.classList.add('hidden');
+        btnPedirGps.classList.remove('hidden');
+      }
+
+      const ultima = lecturasActuales[lecturasActuales.length - 1];
+      document.getElementById('lbl-reloj-ant').textContent = ultima ? fmt(ultima.reloj) : '0';
+      document.getElementById('in-fecha').value = new Date().toISOString().split('T')[0];
+      document.getElementById('in-reloj').value = '';
+      document.getElementById('in-entrega').value = '0';
+      poblarSelectorFilas();
+      recalcularPreview();
+      renderizarFicha();
+      cargarClientes();
+    }
+
+    function recalcularPreview() {
+      if (!clienteActual) return;
+      const ultima = lecturasActuales[lecturasActuales.length - 1];
+      const relojAnt = ultima ? ultima.reloj : 0;
+      const saldoAnt = ultima ? ultima.saldo_resultante : 0;
+      const relojNuevo = Number(document.getElementById('in-reloj').value || 0);
+      const entrega = Number(document.getElementById('in-entrega').value || 0);
+      const juegos = (ultima && relojNuevo > relojAnt) ? (relojNuevo - relojAnt) : 0;
+      const total = juegos * clienteActual.tarifa;
+      const saldo = saldoAnt + total - entrega;
+      document.getElementById('prev-juegos').textContent = fmt(juegos);
+      document.getElementById('prev-total').textContent = fmt(total);
+      document.getElementById('prev-saldo').textContent = fmt(saldo) + ' Gs.';
+    }
+
+    async function guardarLectura(e) {
+      e.preventDefault();
+      const res = await fetch(`/api/clientes/${clienteActual.id}/lecturas`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fecha: document.getElementById('in-fecha').value,
+          reloj: document.getElementById('in-reloj').value,
+          entrega: document.getElementById('in-entrega').value
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) return alert(data.error);
+      seleccionarCliente(clienteActual.id);
+    }
+
+    function abrirModalEditarFila() {
+      const fila = lecturasActuales.find(x => x.id === Number(document.getElementById('sel-editar-fila')?.value));
+      if (!fila) return;
+      document.getElementById('fila-id').value = fila.id;
+      document.getElementById('fila-fecha').value = fila.fecha;
+      document.getElementById('fila-reloj').value = fila.reloj;
+      document.getElementById('fila-entrega').value = fila.entrega || 0;
+      document.getElementById('modal-fila').classList.remove('hidden');
+    }
+    function cerrarModalFila() { document.getElementById('modal-fila').classList.add('hidden'); }
+
+    async function guardarEdicionFila(e) {
+      e.preventDefault();
+      await fetch(`/api/lecturas/${document.getElementById('fila-id').value}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fecha: document.getElementById('fila-fecha').value,
+          reloj: document.getElementById('fila-reloj').value,
+          entrega: document.getElementById('fila-entrega').value
+        })
+      });
+      cerrarModalFila();
+      seleccionarCliente(clienteActual.id);
+    }
+
+    async function borrarUltimaLectura() {
+      const ultima = lecturasActuales[lecturasActuales.length - 1];
+      if (!ultima || !confirm('¿Borrar la última fila cargada de esta ficha?')) return;
+      await fetch(`/api/lecturas/${ultima.id}`, { method: 'DELETE' });
+      seleccionarCliente(clienteActual.id);
+    }
+
+    function renderizarFicha() {
+      const limpiar = modoBlancoTemporal;
+      document.getElementById('f-mesa').textContent = limpiar ? '' : (clienteActual?.mesa_num || '');
+      document.getElementById('f-senor').textContent = limpiar ? '' : (clienteActual?.senor || '');
+      document.getElementById('f-ciudad').textContent = limpiar ? '' : (clienteActual?.ciudad || '');
+      document.getElementById('f-calle').textContent = limpiar ? '' : (clienteActual?.calle || '');
+      document.getElementById('f-lugar').textContent = limpiar ? '' : (clienteActual?.lugar || '');
+      document.getElementById('f-ci').textContent = limpiar ? '' : (clienteActual?.ci || '');
+
+      const ultimas14 = limpiar ? [] : lecturasActuales.slice(-14);
+      let html = '';
+      for (let i = 0; i < 14; i++) {
+        const f = ultimas14[i];
+        if (f) {
+          const [y, m, d] = f.fecha.split('-');
+          html += `<tr class="handwriting"><td>${Number(d)}-${Number(m)}-${y.slice(2)}</td><td>${f.reloj}</td><td>${i === 0 && f.cant_jug === 0 ? '—' : f.cant_jug}</td><td>${i === 0 && f.total_gs === 0 ? '—' : fmt(f.total_gs)}</td><td>${f.entrega > 0 ? fmt(f.entrega) : ''}</td><td>${f.saldo_resultante > 0 ? fmt(f.saldo_resultante) : ''}</td></tr>`;
+        } else html += `<tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
+      }
+      document.getElementById('f-tbody').innerHTML = html;
+    }
+
+    function imprimirCompletada() { modoBlancoTemporal = false; renderizarFicha(); window.print(); }
+    function imprimirEnBlanco() { modoBlancoTemporal = true; renderizarFicha(); window.print(); modoBlancoTemporal = false; renderizarFicha(); }
+
+    function abrirModalNuevoCliente() {
+      document.getElementById('modal-titulo').textContent = 'Nueva Mesa / Cliente';
+      ['cli-id', 'cli-mesa', 'cli-senor', 'cli-ciudad', 'cli-lugar', 'cli-calle', 'cli-ci', 'cli-maps', 'cli-reloj-ini'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('cli-tarifa').value = '1000';
+      document.getElementById('bloque-reloj-inicial').classList.remove('hidden');
+      document.getElementById('cli-fecha-ini').value = new Date().toISOString().split('T')[0];
+      document.getElementById('modal-cliente').classList.remove('hidden');
+    }
+
+    function abrirModalEditarCliente() {
+      if (!clienteActual) return;
+      document.getElementById('modal-titulo').textContent = 'Editar Datos de la Ficha';
+      document.getElementById('cli-id').value = clienteActual.id;
+      document.getElementById('cli-mesa').value = clienteActual.mesa_num;
+      document.getElementById('cli-senor').value = clienteActual.senor;
+      document.getElementById('cli-ciudad').value = clienteActual.ciudad;
+      document.getElementById('cli-lugar').value = clienteActual.lugar;
+      document.getElementById('cli-calle').value = clienteActual.calle;
+      document.getElementById('cli-ci').value = clienteActual.ci;
+      document.getElementById('cli-maps').value = clienteActual.maps_url || '';
+      document.getElementById('cli-tarifa').value = clienteActual.tarifa;
+      document.getElementById('bloque-reloj-inicial').classList.add('hidden');
+      document.getElementById('modal-cliente').classList.remove('hidden');
+    }
+    function cerrarModalCliente() { document.getElementById('modal-cliente').classList.add('hidden'); }
+
+    async function guardarCliente(e) {
+      e.preventDefault();
+      const id = document.getElementById('cli-id').value;
+      const res = await fetch(id ? `/api/clientes/${id}` : '/api/clientes', {
+        method: id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mesa_num: document.getElementById('cli-mesa').value,
+          senor: document.getElementById('cli-senor').value,
+          ciudad: document.getElementById('cli-ciudad').value,
+          lugar: document.getElementById('cli-lugar').value,
+          calle: document.getElementById('cli-calle').value,
+          ci: document.getElementById('cli-ci').value,
+          maps_url: document.getElementById('cli-maps').value,
+          tarifa: document.getElementById('cli-tarifa').value,
+          reloj_inicial: document.getElementById('cli-reloj-ini').value,
+          fecha_inicial: document.getElementById('cli-fecha-ini').value
+        })
+      });
+      const data = await res.json();
+      cerrarModalCliente();
+      await cargarClientes();
+      seleccionarCliente(id ? Number(id) : data.id);
+    }
+
+    cargarClientes();
+  </script>
+</body>
+</html>
